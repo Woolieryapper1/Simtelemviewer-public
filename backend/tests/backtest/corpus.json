@@ -1,0 +1,6 @@
+{
+  "_about": "Which real runs the backtest uses (fs-telemetry validate). The files themselves never go into git. 'default' = the app's own folder (FS_TELEMETRY_DIR / FS_IRACING_DIR), or give a path, or null to skip that sim. 'exclude': run file-name patterns to leave out. 'setups': AC files don't record the setup, so label runs (file-name pattern -> setup name) to compare 'same car and setup' properly.",
+  "folders": {"ac": "default", "iracing": "default"},
+  "exclude": [],
+  "setups": {}
+}

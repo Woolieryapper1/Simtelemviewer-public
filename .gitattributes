@@ -1,0 +1,6 @@
+# Windows batch files need Windows line endings, or cmd can misread them
+*.bat text eol=crlf
+
+# Built web pages and vendored libraries: store byte-for-byte, exactly as built/downloaded
+backend/fs_telemetry/web/** -text
+web/public/vendor/** -text

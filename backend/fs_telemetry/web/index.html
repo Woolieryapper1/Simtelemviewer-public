@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FS2627</title>
+  <!-- Put a light/dark choice saved in this browser on the page before it first paints,
+       so it doesn't flash the other theme (src/theme.js does the rest) -->
+  <script>
+    try { var t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+  </script>
+  <!-- Plotly draws the charts; vendored copy, see public/vendor/README.md -->
+  <script src="/vendor/plotly.min.js"></script>
+  <script type="module" crossorigin src="/assets/index-DG4MJ18F.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-iPsVGtyC.css">
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>

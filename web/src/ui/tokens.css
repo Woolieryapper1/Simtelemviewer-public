@@ -1,0 +1,227 @@
+/* Design tokens: every colour, size and timing the app uses, as CSS variables.
+   Pages and components only ever use these names, never raw colours, so the
+   light and dark themes (and later tweaks) are a change in this one file.
+
+   Which theme shows:
+     - by default it follows the computer's setting (prefers-color-scheme)
+     - the theme menu in the top bar can force one; that choice is saved in the
+       browser and put on <html data-theme="light|dark"> by theme.js
+     - any element can force a theme for itself and everything inside it with
+       data-theme="light|dark" (the /design page uses this to show both side by side)
+
+   The colour values are written out in full in each theme block (nothing
+   derived from another variable) so a nested data-theme gets the right values.
+   The contrast of every text colour on every surface is checked by
+   backend/tests/test_web_contrast.py (WCAG AA, 4.5:1). */
+
+/* ---------- sizes, type and timing: the same in both themes ---------- */
+:root {
+  /* Spacing scale (px): use these for padding, gaps and margins */
+  --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px;
+  --space-5: 12px; --space-6: 16px; --space-7: 24px; --space-8: 32px;
+
+  /* Corners */
+  --radius-sm: 6px;         /* small controls, tags */
+  --radius: 8px;            /* buttons, inputs */
+  --radius-card: 12px;      /* cards and panels */
+  --radius-pill: 999px;
+
+  /* Type. No web font is downloaded: the app runs offline, and each system's
+     own UI font (Segoe UI on Windows) is clear at small sizes. Numbers use
+     tabular figures everywhere (see body below) so columns of times line up. */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  --text-xs: 11px;          /* tags, table headers, chart labels */
+  --text-sm: 12px;          /* hints, secondary lines */
+  --text-md: 13px;          /* dense tables */
+  --text-base: 14px;        /* body */
+  --text-lg: 15px;          /* group headers, big numbers in lists */
+  --text-xl: 18px;          /* section headings */
+  --text-2xl: 20px;         /* stat tile values */
+  --line: 1.45;
+
+  /* Stacking order */
+  --z-sticky: 1; --z-overlay: 2; --z-popover: 20; --z-toast: 40; --z-modal: 50;
+
+  /* Motion: short and only where it helps; switched off for people who ask for less motion */
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --ease: cubic-bezier(.2, 0, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+}
+
+/* ---------- dark theme (the default) ---------- */
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces, from the back of the page forwards */
+  --page: #0f0f11;
+  --chrome: #131316;        /* top bar + drawer */
+  --card: #18181b;
+  --raised: #27272a;        /* hovered and selected rows, active tab */
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --scrim: rgba(0, 0, 0, .55);           /* behind a modal */
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, .45);
+  --swatch-ring: rgba(255, 255, 255, .18); /* thin edge round colour boxes */
+
+  /* Text */
+  --text: #fafafa;
+  --text-2: #a1a1aa;        /* secondary text */
+  --text-3: #8f8f99;        /* hints, metadata (zinc-500 was too faint for AA) */
+
+  /* Indigo accent */
+  --accent: #818cf8;        /* borders, focus, selected marks */
+  --accent-text: #a5b4fc;   /* accent-coloured text */
+  --accent-bg: rgba(129, 140, 248, .16);
+  --accent-solid: #4f46e5;  /* filled primary buttons */
+  --accent-solid-hover: #4338ca;
+  --on-accent: #ffffff;     /* text on --accent-solid */
+  --focus: #a5b4fc;
+
+  /* Status: text colour + a soft background for tags */
+  --bad: #f87171;    --bad-bg: rgba(248, 113, 113, .14);   --bad-border: rgba(248, 113, 113, .4);   /* slower / invalid */
+  --good: #4ade80;   --good-bg: rgba(74, 222, 128, .14);   --good-border: rgba(74, 222, 128, .4);   /* faster */
+  --warn: #fde047;   --warn-bg: rgba(234, 179, 8, .16);    --warn-border: rgba(234, 179, 8, .4);    /* estimated / learned */
+  --info: #7dd3fc;   --info-bg: rgba(56, 189, 248, .14);   --info-border: rgba(56, 189, 248, .4);
+
+  /* Sector colours, F1 timing style */
+  --sector-best: #d8b4fe;   --sector-best-bg: rgba(168, 85, 247, .22);   /* purple: best overall */
+  --sector-pb: #86efac;     --sector-pb-bg: rgba(34, 197, 94, .20);      /* green: personal best */
+  --sector-slow: #fde047;   --sector-slow-bg: rgba(234, 179, 8, .20);    /* yellow: slower */
+
+  /* One colour per compared lap, in a fixed order (tyre charts use 1-4 for FL, FR, RL, RR).
+     Checked for colour-blind readers, see colours.js. */
+  --lap-1: #8a80f5; --lap-2: #16a374; --lap-3: #d95926; --lap-4: #2084b4; --lap-5: #c98500; --lap-6: #d55181;
+
+  /* Pedals: the usual motorsport green and red */
+  --throttle: #22c55e;
+  --brake: #ef4444;
+  /* Racing lines coloured by pedal on the track map (soft, so the map isn't shouting) */
+  --pedal-throttle: #86efac; --pedal-coast: #f5f5f4; --pedal-brake: #fca5a5;
+
+  /* Channel colours in rows that overlay several channels (green and red are kept for the pedals) */
+  --channel-1: #818cf8; --channel-2: #f97316; --channel-3: #eab308; --channel-4: #ec4899;
+  --channel-5: #06b6d4; --channel-6: #a855f7; --channel-7: #94a3b8; --channel-8: #fde68a;
+
+  /* Corner gates on the metrics page: braking, LS, MS, HS, power limited */
+  --gate-0: #ef4444; --gate-1: #a78bfa; --gate-2: #ec4899; --gate-3: #22c55e; --gate-4: #eab308;
+
+  /* Track maps: the surface, its edges, and speed from slow to fast */
+  --track-surface: #232327;
+  --track-edge: #52525b;
+  --speed-1: #312e81; --speed-2: #4f46e5; --speed-3: #818cf8; --speed-4: #e0e7ff;
+}
+
+/* ---------- light theme ---------- */
+/* Written twice on purpose: once for "follow the computer" and once for the
+   manual choice. Keep the two blocks the same. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --page: #f4f4f5;
+    --chrome: #fafafa;
+    --card: #ffffff;
+    --raised: #ececef;
+    --border: #e4e4e7;
+    --border-strong: #d4d4d8;
+    --scrim: rgba(24, 24, 27, .35);
+    --shadow-pop: 0 12px 32px rgba(24, 24, 27, .16);
+    --swatch-ring: rgba(0, 0, 0, .18);
+    --text: #18181b;
+    --text-2: #52525b;
+    --text-3: #63636d;
+    --accent: #6366f1;
+    --accent-text: #4338ca;
+    --accent-bg: rgba(99, 102, 241, .12);
+    --accent-solid: #4f46e5;
+    --accent-solid-hover: #4338ca;
+    --on-accent: #ffffff;
+    --focus: #4f46e5;
+    --bad: #c81e1e;    --bad-bg: rgba(220, 38, 38, .09);    --bad-border: rgba(220, 38, 38, .35);
+    --good: #157a3b;   --good-bg: rgba(22, 163, 74, .10);   --good-border: rgba(22, 163, 74, .35);
+    --warn: #915a05;   --warn-bg: rgba(202, 138, 4, .12);   --warn-border: rgba(202, 138, 4, .4);
+    --info: #0369a1;   --info-bg: rgba(14, 165, 233, .10);  --info-border: rgba(14, 165, 233, .35);
+    --sector-best: #7e22ce;   --sector-best-bg: rgba(168, 85, 247, .14);
+    --sector-pb: #157a3b;     --sector-pb-bg: rgba(34, 197, 94, .16);
+    --sector-slow: #85520a;   --sector-slow-bg: rgba(234, 179, 8, .22);
+    --lap-1: #4f46e5; --lap-2: #0f9a6a; --lap-3: #e35f2a; --lap-4: #0679a8; --lap-5: #c98500; --lap-6: #d6578a;
+    --throttle: #16a34a;
+    --brake: #dc2626;
+    --pedal-throttle: #16a34a; --pedal-coast: #a1a1aa; --pedal-brake: #dc2626;
+    --channel-1: #4f46e5; --channel-2: #ea580c; --channel-3: #ca8a04; --channel-4: #db2777;
+    --channel-5: #0891b2; --channel-6: #9333ea; --channel-7: #64748b; --channel-8: #b45309;
+    --gate-0: #dc2626; --gate-1: #7c3aed; --gate-2: #db2777; --gate-3: #16a34a; --gate-4: #ca8a04;
+    --track-surface: #e4e4e7;
+    --track-edge: #a1a1aa;
+    --speed-1: #c7d2fe; --speed-2: #818cf8; --speed-3: #4f46e5; --speed-4: #312e81;
+  }
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --page: #f4f4f5;
+  --chrome: #fafafa;
+  --card: #ffffff;
+  --raised: #ececef;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --scrim: rgba(24, 24, 27, .35);
+  --shadow-pop: 0 12px 32px rgba(24, 24, 27, .16);
+  --swatch-ring: rgba(0, 0, 0, .18);
+  --text: #18181b;
+  --text-2: #52525b;
+  --text-3: #63636d;
+  --accent: #6366f1;
+  --accent-text: #4338ca;
+  --accent-bg: rgba(99, 102, 241, .12);
+  --accent-solid: #4f46e5;
+  --accent-solid-hover: #4338ca;
+  --on-accent: #ffffff;
+  --focus: #4f46e5;
+  --bad: #c81e1e;    --bad-bg: rgba(220, 38, 38, .09);    --bad-border: rgba(220, 38, 38, .35);
+  --good: #157a3b;   --good-bg: rgba(22, 163, 74, .10);   --good-border: rgba(22, 163, 74, .35);
+  --warn: #915a05;   --warn-bg: rgba(202, 138, 4, .12);   --warn-border: rgba(202, 138, 4, .4);
+  --info: #0369a1;   --info-bg: rgba(14, 165, 233, .10);  --info-border: rgba(14, 165, 233, .35);
+  --sector-best: #7e22ce;   --sector-best-bg: rgba(168, 85, 247, .14);
+  --sector-pb: #157a3b;     --sector-pb-bg: rgba(34, 197, 94, .16);
+  --sector-slow: #85520a;   --sector-slow-bg: rgba(234, 179, 8, .22);
+  --lap-1: #4f46e5; --lap-2: #0f9a6a; --lap-3: #e35f2a; --lap-4: #0679a8; --lap-5: #c98500; --lap-6: #d6578a;
+  --throttle: #16a34a;
+  --brake: #dc2626;
+  --pedal-throttle: #16a34a; --pedal-coast: #a1a1aa; --pedal-brake: #dc2626;
+  --channel-1: #4f46e5; --channel-2: #ea580c; --channel-3: #ca8a04; --channel-4: #db2777;
+  --channel-5: #0891b2; --channel-6: #9333ea; --channel-7: #64748b; --channel-8: #b45309;
+  --gate-0: #dc2626; --gate-1: #7c3aed; --gate-2: #db2777; --gate-3: #16a34a; --gate-4: #ca8a04;
+  --track-surface: #e4e4e7;
+  --track-edge: #a1a1aa;
+  --speed-1: #c7d2fe; --speed-2: #818cf8; --speed-3: #4f46e5; --speed-4: #312e81;
+}
+
+/* ---------- base: page, type and focus ---------- */
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font: var(--text-base)/var(--line) var(--font-sans);
+  font-variant-numeric: tabular-nums; /* every number lines up in columns */
+  background: var(--page);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+/* An element that forces a theme also repaints its own background and text */
+[data-theme] { background: var(--page); color: var(--text); }
+button, select, input, textarea { font: inherit; color: inherit; }
+h1, h2, h3, h4 { margin: 0; font-weight: 600; }
+/* A clear focus ring for keyboard users only (not on every mouse click) */
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+::selection { background: var(--accent-bg); }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-2); }
+.faint { color: var(--text-3); }
+/* Hidden on screen but read out by screen readers */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}

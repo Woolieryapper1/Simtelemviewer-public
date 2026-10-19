@@ -1,0 +1,51 @@
+# Makes the app an installable Python package:
+#   pip install .            installs it, plus the fs-telemetry command that starts it
+#   pip install -e ".[dev]"  for working on it: code changes apply straight away, plus the test tools
+# The exact versions of every package (including the ones these pull in) are in
+# backend/requirements.lock.txt - setup.bat installs from that first.
+
+[build-system]
+# Only used while installing, to build the package. MIT, from the Python Packaging Authority.
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fs-telemetry"
+version = "0.1.0"
+description = "Telemetry dashboard for the SUFST FS sim team: Assetto Corsa MoTeC .ld files, lap comparison, stints, metrics and setups"
+readme = "README.md"
+requires-python = ">=3.14"
+# Pinned versions, from public PyPI (approved for this project).
+# Each was checked for licence and release age (>= 15 days old) before adding.
+dependencies = [
+    "numpy==2.5.3",      # BSD-3-Clause - fast arrays for telemetry channels
+    "fastapi==0.141.1",  # MIT - the web API framework
+    "starlette==1.6.0",  # BSD-3-Clause - used by fastapi; pinned below 1.7.0 (too new when checked)
+    "uvicorn==0.53.0",   # BSD-3-Clause - the server that runs the API
+]
+
+[project.optional-dependencies]
+# Only needed for running tests, not for running the app
+dev = [
+    "pytest==9.1.1",  # MIT - test runner
+    "httpx==0.28.1",  # BSD-3-Clause - lets tests call the API without starting a server
+]
+
+[project.scripts]
+fs-telemetry = "fs_telemetry.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["fs_telemetry*"]
+
+[tool.setuptools.package-data]
+# The built web pages (made by `npm --prefix web run build`)
+fs_telemetry = ["web/**/*", "backtest/baseline.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]  # so tests run against this folder's code, installed or not
+# The real-telemetry backtest is left out of a normal run (it needs your files and checks the baseline);
+# run it with: pytest -m backtest
+addopts = "-m 'not backtest'"
+markers = ["backtest: runs the estimators over your real telemetry and checks the committed baseline"]

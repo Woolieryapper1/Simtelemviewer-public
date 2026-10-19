@@ -1,0 +1,28 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node (React frontend in web/) - packages and build output are re-creatable
+node_modules/
+web/dist/
+
+# Python packaging leftovers (pip install .)
+*.egg-info/
+build/
+
+# Generated data (telemetry caches etc.) - never commit team telemetry
+data/
+
+# Backtest reports (fs-telemetry validate) - made on each PC from its own telemetry
+backtest-report/
+
+# Office lock files
+~$*
+
+# Local tooling and personal docs - keep on disk, don't upload
+.claude/
+*.docx
+
+# Each person's own folder settings (see my-settings.example.bat)
+my-settings.bat
