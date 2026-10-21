@@ -33,12 +33,13 @@ class LapInfo:
 
 def lap_infos(s: LdSession) -> list[LapInfo]:
     laps = s.laps
+    breaks = set(s.breaks)
     inv = s.channels.get(INVALID_CHANNEL)
     out = []
     for i, lap in enumerate(laps):
-        if i == len(laps) - 1:
-            kind = "incomplete"  # no beacon at the end: session stopped mid-lap
-        elif i == 0:
+        if i == len(laps) - 1 or lap.end in breaks:
+            kind = "incomplete"  # no beacon at the end: session stopped (or was cut off) mid-lap
+        elif i == 0 or lap.start in breaks:
             kind = "out"
         else:
             kind = "timed"
@@ -146,7 +147,7 @@ def resample_lap(
     """
     laps = s.laps
     lap = laps[lap_number - 1]
-    t, lt, d = _lap_distance(s, lap, has_end_beacon=lap_number < len(laps))
+    t, lt, d = _lap_distance(s, lap, has_end_beacon=lap_number < len(laps) and lap.end not in s.breaks)
     if len(d) < 2:
         return {"Distance": np.array([]), "Time": np.array([])}
 

@@ -140,7 +140,14 @@ def test_every_session_gets_finite_maths_channels(real):
         from fs_telemetry.aero import UNITS as AERO
         expected = {m.name for m in maths.CHANNELS + maths.car_channels(s) if not m.approximate or m.name in ("Understeer Angle", "Mech Balance (est.)")}
         dampers = {m.name for m in maths.damper_channels(s)}  # AC doesn't log damper velocity: estimated from travel
-        assert {c.name for c in made} == expected | {f"{k} (est.)" for k in AERO} | dampers
+        aero = {f"{k} (est.)" for k in AERO}
+        if "Lap Progression" in s.channels:
+            # CSP's logger: what it logs depends on the car and its settings, and it also keeps
+            # runs that never left the pits (nothing to weigh the car by)
+            expected = {m.name for m in maths.CHANNELS + maths.car_channels(s) if m.name in expected
+                        and all(i in s.channels for i in m.inputs)}
+            aero &= {c.name for c in made}
+        assert {c.name for c in made} == expected | aero | dampers
         for c in made:
             assert np.all(np.isfinite(c.data)), f"{summary.id}: {c.name} has NaN/inf"
 

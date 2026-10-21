@@ -77,6 +77,16 @@ def read_fast_lane(path: Path, layout: str = "") -> TrackGeometry:
     )
 
 
+def ai_line_length(path: Path) -> float:
+    """Length of the AI line (m). Reads only the points, so it also works on files
+    whose track-width data read_fast_lane can't use."""
+    buf = Path(path).read_bytes()
+    version, n = struct.unpack_from("<2i", buf, 0)
+    if version != 7 or n < 2:
+        raise ValueError(f"{path}: not a version-7 AI line")
+    return float(np.frombuffer(buf, dtype=_POINT, count=n, offset=16)["length"][-1])
+
+
 def find_layouts(tracks_dirs: list[Path], track: str) -> dict[str, Path]:
     """All fast_lane.ai files for a track: {"track" or "track/layout": path}.
     Tracks with layouts keep them in sub-folders: <track>/<layout>/ai/fast_lane.ai"""

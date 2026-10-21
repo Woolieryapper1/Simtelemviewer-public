@@ -1,8 +1,11 @@
 """Read MoTeC i2 log files (.ld + .ldx) exported from Assetto Corsa.
 
-The telemetrick app in AC writes two files per session:
+Two AC loggers write these, two files per session:
   * <name>.ld  - binary file with every logged channel (speed, throttle, tyre temps...)
   * <name>.ldx - small XML file with lap beacons (the times each lap was completed)
+The telemetrick app's files are what the rest of the app expects. Custom Shaders
+Patch's built-in logger names channels differently and doesn't always write
+beacons, so its files are converted right after reading (see ingest/csp.py).
 
 MoTeC never published the .ld format. The layout below follows the community
 reverse-engineering in https://github.com/gotzl/ldparser, and was checked against
@@ -105,6 +108,9 @@ class LdSession:
     time: str
     channels: dict[str, Channel]
     beacons: list[float] = field(default_factory=list)  # lap-line crossings, seconds
+    # Moments the run was cut off mid-lap (CSP logs on after "back to pits"; telemetrick
+    # starts a new file): the lap so far ends there unfinished and an out lap starts
+    breaks: list[float] = field(default_factory=list)
     details: dict[str, str] = field(default_factory=dict)  # from the .ldx, e.g. "Vehicle Wheelbase": "1.545"
     source: str = "ac"  # which sim it came from: "ac" (this reader) or "iracing" (ingest/ibt.py)
     sector_lines_m: list[float] = field(default_factory=list)  # official sector lines, if the file says (iRacing does)
@@ -115,9 +121,9 @@ class LdSession:
 
     @cached_property
     def laps(self) -> list[Lap]:
-        """Split the session at each beacon. First lap is the out lap; the last
+        """Split the session at each beacon (and break). First lap is the out lap; the last
         one is usually incomplete (in lap / session ended mid-lap)."""
-        edges = [0.0, *self.beacons, self.duration]
+        edges = [0.0, *sorted({*self.beacons, *self.breaks}), self.duration]
         return [Lap(i + 1, a, b) for i, (a, b) in enumerate(zip(edges, edges[1:]))]
 
 
@@ -165,8 +171,11 @@ def read_ld(path: str | Path) -> LdSession:
             channels[ch.name] = ch
         ptr = next_ptr
 
-    return LdSession(
+    session = LdSession(
         path=path, driver=driver, car=car, track=track, date=date, time=time,
         channels=channels, beacons=read_ldx_beacons(path.with_suffix(".ldx")),
         details=read_ldx_details(path.with_suffix(".ldx")),
     )
+    from .csp import adapt_csp_log, is_csp_log  # here, not at the top: csp.py builds on this module
+
+    return adapt_csp_log(session) if is_csp_log(session) else session

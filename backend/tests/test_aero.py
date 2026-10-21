@@ -119,6 +119,8 @@ def test_weight_matches_the_ldx_and_cla_is_consistent_per_car(real):
     by_car: dict[str, list[float]] = {}
     for summary in [x for x in catalog.summaries() if x.source == "ac"]:  # iRacing doesn't log tyre loads
         s = catalog.get(summary.id)
+        if "Vehicle Weight" not in s.details:
+            continue  # CSP's logger doesn't write the car's weight (and logs pit-lane-only runs)
         cal, _ = calibrate(s)
         assert cal.trustworthy, summary.id
         ldx_kg = float(s.details["Vehicle Weight"])

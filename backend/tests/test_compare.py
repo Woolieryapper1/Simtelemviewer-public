@@ -127,7 +127,8 @@ def test_sector_lines_match_ac_own_sector_times_on_real_data():
 
     if not (TELEMETRY_DIR.exists() and any(TELEMETRY_DIR.rglob("*.ld"))):
         pytest.skip("no .ld files on this machine")
-    track = next(x for x in catalog.summaries() if x.source == "ac").track
+    # CSP's logger doesn't log AC's sector times, so use a track telemetrick has run on
+    track = next(x.track for x in catalog.summaries() if x.source == "ac" and "Last Sector Time" in catalog.get(x.id).channels)
     lines, source = sector_boundaries(catalog, track)
     assert source.startswith("AC sector timing")
     errors = []

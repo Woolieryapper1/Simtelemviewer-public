@@ -1,7 +1,8 @@
 """Finds telemetry files on disk and keeps parsed sessions in memory.
 
 Three kinds of file:
-  * .ld   - MoTeC files from the telemetrick AC app (ingest/motec_ld.py), in TELEMETRY_DIR
+  * .ld   - MoTeC files from AC: the telemetrick app or CSP's own logger (ingest/motec_ld.py,
+             ingest/csp.py), in TELEMETRY_DIR
   * .ibt  - iRacing's own telemetry files (ingest/ibt.py), in IRACING_DIR
   * .csv  - CSV from anything else: other sims, loggers, the app's own downloads (ingest/csv_import.py), in CSV_DIR
 All the readers give back the same kind of session, so nothing after this point
