@@ -1,7 +1,8 @@
 # FS Sim Telemetry Viewer
 
 A web dashboard for the SUFST FS sim team to analyse driving data from **Assetto Corsa** (MoTeC `.ld` files from the
-**telemetrick** app), **iRacing** (`.ibt` files) and **CSV** files from other sims or loggers.
+**telemetrick** app or Custom Shaders Patch's own telemetry logger), **iRacing** (`.ibt` files) and **CSV** files from
+other sims or loggers.
 It runs on your own PC; nothing is uploaded anywhere.
 
 | Page | What it's for |
@@ -51,6 +52,11 @@ The black window lists the folders it's using. The defaults ("Documents" is foun
 | AC install (track outlines) | `C:\Program Files (x86)\Steam\steamapps\common\assettocorsa` | `FS_AC_DIR` |
 | AC setups | `Documents\Assetto Corsa\setups` | `FS_AC_SETUPS_DIR` |
 | The app's saved data | `C:\Users\<you>\FS Telemetry` | `FS_DATA_DIR` |
+
+CSP's logger saves into `Documents\Assetto Corsa\telemetry`. To see those runs as well as telemetrick's, set
+`FS_TELEMETRY_DIR` to `Documents\Assetto Corsa` (it searches sub-folders, so it finds both). CSP doesn't log the car's
+wheelbase, so Understeer Angle only shows for its runs if the car's steering ratio or wheelbase is known (`cars.py`
+or the car's unpacked AC files).
 
 To change one, copy **`my-settings.example.bat`** to **`my-settings.bat`**, fill it in (instructions inside) and restart.
 Sub-folders are searched too.

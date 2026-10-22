@@ -53,6 +53,10 @@ def test_built_in_channels_exist_in_real_exports():
         pytest.skip("no .ld files on this machine")
     from fs_telemetry.maths import add_maths_channels
 
-    channels = add_maths_channels(read_ld(files[0])).channels
+    # A telemetrick export: what CSP's logger logs depends on the car and its settings
+    s = next((s for s in map(read_ld, sorted(files)) if "Lap Progression" not in s.channels), None)
+    if s is None:
+        pytest.skip("no telemetrick exports on this machine")
+    channels = add_maths_channels(s).channels
     missing = {c for panels in BUILT_IN.values() for p in panels for c in p if c not in channels}
     assert not missing
