@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "./api.js";
 import Arrange from "./Arrange.jsx";
 import { drawBalance, drawGateMap, drawGG, drawMech } from "./charts.js";
+import CamberBox from "./CamberBox.jsx";
 import DamperBox from "./DamperBox.jsx";
 import Definitions from "./Definitions.jsx";
 import { fmtLap, num, shortLabel, signed } from "./format.js";
@@ -49,7 +50,7 @@ export default function MetricsPage({ laps: allLaps, settings, onSettings, compa
   const key = JSON.stringify([laps.map((l) => l.key), settings]);
   useEffect(() => {
     if (!laps.length) { setMetrics(null); return; }
-    if (section === "dampers") return;
+    if (section === "dampers" || section === "camber") return;
     let stale = false;
     setError(null);
     api.metrics(laps, settings)
@@ -65,17 +66,19 @@ export default function MetricsPage({ laps: allLaps, settings, onSettings, compa
     <div className="analysis-nav">
       <Segmented label="Metrics view" value={section} onChange={setSection} options={[
         { value: "overview", label: "Overview" }, { value: "balance", label: "Balance" },
-        { value: "dampers", label: "Dampers" },
+        { value: "dampers", label: "Dampers" }, { value: "camber", label: "Camber" },
       ]} />
       <span className="muted">{section === "overview" ? "Corner gates, driving inputs and lap summaries"
         : section === "balance" ? "Dynamic balance and estimated mechanical balance"
-        : "Damper speeds by lap, run or corner gate"}</span>
+        : section === "dampers" ? "Damper speeds by lap, run or corner gate"
+        : "Best static camber per axle from the tyre's camber curve (AC)"}</span>
     </div>
     <Definitions settings={settings} onChange={onSettings} summary={summary} />
   </>;
 
   if (!laps.length) return <>{defs}<div className="empty">Tick full timed laps in the drawer to compare their metrics</div></>;
   if (section === "dampers") return <>{defs}<DamperBox laps={laps} settings={settings} /></>;
+  if (section === "camber") return <>{defs}<CamberBox laps={laps} /></>;
   if (error) return <>{defs}<div className="error">{error}</div></>;
   if (!m) return <>{defs}<div className="empty">Loading…</div></>;
   // Match each result to its compared lap (for colours and names). While new

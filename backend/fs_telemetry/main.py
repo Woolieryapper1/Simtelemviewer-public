@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .aero import AeroMap, aero_map
+from .camber import Camber, CamberSettings, compute_camber
 from .catalog import Catalog, SessionSummary, session_key
 from .compare import CompareError, Comparison, LapRef, compare_laps
 from .dampers import Dampers, DamperSettings, compute_dampers
@@ -239,6 +240,21 @@ def dampers(q: Annotated[DampersQuery, Query()]) -> Dampers:
         settings = DamperSettings(**{k: data[k] for k in DamperSettings.model_fields})
         gating = MetricSettings(**{k: data[k] for k in MetricSettings.model_fields})
         return compute_dampers(catalog, [LapRef.parse(x) for x in q.lap], settings, gating)
+    except CompareError as e:
+        raise HTTPException(422, str(e))
+
+
+class CamberQuery(CamberSettings):
+    lap: list[str] = Field(description="Laps as '<session id>:<lap number>'.")
+
+
+@api.get("/camber")
+def camber(q: Annotated[CamberQuery, Query()]) -> Camber:
+    """Best static camber change per axle (AC only): the logged camber while near the limit, scored against
+    the tyre's camber curve from tyres.ini (or typed-in DCAMBER numbers), weighted by tyre load."""
+    try:
+        settings = CamberSettings(**q.model_dump(exclude={"lap"}))
+        return compute_camber(catalog, [LapRef.parse(x) for x in q.lap], settings)
     except CompareError as e:
         raise HTTPException(422, str(e))
 

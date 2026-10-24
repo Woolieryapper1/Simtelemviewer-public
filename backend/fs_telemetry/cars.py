@@ -59,15 +59,23 @@ def _ini_number(path: Path, key: str) -> float | None:
     return abs(float(m.group(1))) or None  # 0 counts as "not given"
 
 
-def from_ac_files(car: str) -> Car | None:
-    """Steering ratio and wheelbase from the car's AC files, if they can be read."""
+def ac_data_dir(car: str) -> Path | None:
+    """The car's unpacked AC data folder (first match in CARS_DIRS), or None."""
     if not car or any(c in car for c in "/\\:") or ".." in car:
         return None  # a car name, not a path
     for folder in CARS_DIRS:
         data = folder / car / "data"
         if data.is_dir():
-            return Car(_ini_number(data / "car.ini", "STEER_RATIO"), _ini_number(data / "suspensions.ini", "WHEELBASE"))
+            return data
     return None
+
+
+def from_ac_files(car: str) -> Car | None:
+    """Steering ratio and wheelbase from the car's AC files, if they can be read."""
+    data = ac_data_dir(car)
+    if data is None:
+        return None
+    return Car(_ini_number(data / "car.ini", "STEER_RATIO"), _ini_number(data / "suspensions.ini", "WHEELBASE"))
 
 
 def car_facts(s: LdSession) -> CarFacts:

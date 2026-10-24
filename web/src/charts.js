@@ -285,6 +285,36 @@ export function drawDampers(el, d, sels, { view, sharedY, diff }) {
   }), { ...PLOT_CONFIG, displayModeBar: false });
 }
 
+// Camber optimiser: one panel per axle, the score for each static camber change tried.
+// d: the /api/camber response; sels: [{ label, slot }] per selection. 0 = camber as run; the dot is the best.
+export function drawCamber(el, d, sels) {
+  const axles = ["Front", "Rear"], gap = 0.08;
+  const traces = [], axes = {}, shapes = [], annotations = [];
+  axles.forEach((axle, p) => {
+    const n = p ? "2" : "", xa = `x${n}`, ya = `y${n}`;
+    axes[`xaxis${n}`] = axis({ domain: [p * (0.5 + gap / 2), p * (0.5 + gap / 2) + 0.5 - gap / 2], anchor: ya, zeroline: false,
+      title: { text: "Static camber change [deg]   − more negative", standoff: 4 } });
+    axes[`yaxis${n}`] = axis({ anchor: xa, ticksuffix: "%", ...(p ? { matches: "y" } : { title: { text: "Camber grip score" } }) });
+    d.selections.forEach((s, i) => {
+      const a = s.axles.find((x) => x.axle === axle);
+      if (!a?.score_pct.length) return;
+      const common = { xaxis: xa, yaxis: ya, name: sels[i].label, legendgroup: sels[i].label };
+      traces.push({ ...common, x: a.offsets_deg, y: a.score_pct, type: "scatter", mode: "lines", showlegend: p === 0,
+        line: { color: lapColor(sels[i].slot), width: 2 }, hovertemplate: `%{x:+.1f}° · %{y:.2f}%<extra>${axle} · ${sels[i].label}</extra>` });
+      traces.push({ ...common, x: [a.best_offset_deg], y: [a.best_pct], type: "scatter", mode: "markers", showlegend: false,
+        marker: { color: lapColor(sels[i].slot), size: 9, line: { color: css("--card"), width: 1.5 } },
+        hovertemplate: `best %{x:+.1f}° · %{y:.2f}%<extra>${axle} · ${sels[i].label}</extra>` });
+    });
+    shapes.push({ type: "line", xref: xa, yref: `${ya} domain`, x0: 0, x1: 0, y0: 0, y1: 1, line: { color: css("--text-3"), width: 1, dash: "dot" } });
+    annotations.push({ text: axle, xref: `${xa} domain`, yref: `${ya} domain`, x: 0.01, y: 1, xanchor: "left", yanchor: "top",
+      showarrow: false, font: { size: 11, color: css("--text-2") } });
+  });
+  Plotly.react(el, traces, base(290, {
+    margin: { l: 56, r: 12, t: 28, b: 44 }, hovermode: "closest", showlegend: true, shapes, annotations, ...axes,
+    legend: { orientation: "h", x: 1, xanchor: "right", y: 1.01, yanchor: "bottom", font: { color: css("--text-2") } },
+  }), { ...PLOT_CONFIG, displayModeBar: false });
+}
+
 // ---------- track maps ----------
 // opts: { surface, lines, lineColour: "lap" | "pedals", colouring: "dominance" | "speed" | "none", labels, big, height }
 //   surface    - track edges + tarmac from the AC track files (if the server has them)
