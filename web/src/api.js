@@ -28,6 +28,10 @@ const sendJSON = (method, url, body) =>
 
 export const api = {
   sessions: () => getJSON("/api/sessions"),
+  // The team library: runs shared in a folder the team syncs (see shared.py)
+  team: () => getJSON("/api/team"),
+  share: (id) => getJSON(`/api/sessions/${encodeURIComponent(id)}/share`, { method: "POST" }),
+  unshare: (id) => getJSON(`/api/sessions/${encodeURIComponent(id)}/share`, { method: "DELETE" }),
   laps: (id) => getJSON(`/api/sessions/${encodeURIComponent(id)}/laps`),
   channels: (id) => getJSON(`/api/sessions/${encodeURIComponent(id)}/channels`),
   aero: (id) => getJSON(`/api/sessions/${encodeURIComponent(id)}/aero`),
