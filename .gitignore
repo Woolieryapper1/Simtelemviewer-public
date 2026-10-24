@@ -20,8 +20,13 @@ backtest-report/
 # Office lock files
 ~$*
 
-# Local tooling and personal docs - keep on disk, don't upload
-.claude/
+# Local tooling and personal docs - keep on disk, don't upload.
+# AGENTS.md and CLAUDE.md are shared; each person's own agent notes go in the .local files.
+.claude/*
+!.claude/launch.json
+.codex/
+AGENTS.local.md
+CLAUDE.local.md
 *.docx
 
 # Each person's own folder settings (see my-settings.example.bat)
