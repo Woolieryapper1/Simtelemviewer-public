@@ -1,6 +1,7 @@
 """Settings. Change these with environment variables rather than editing code,
 so each team member can point the app at their own telemetry folder."""
 
+import getpass
 import os
 from pathlib import Path
 
@@ -71,6 +72,14 @@ DATA_DIR = Path(os.environ.get("FS_DATA_DIR", Path.home() / "FS Telemetry"))
 # CSV downloads), searched recursively. How each source's columns are read is saved
 # in csv_mappings.json in DATA_DIR (see ingest/csv_import.py).
 CSV_DIR = Path(os.environ.get("FS_CSV_DIR", DATA_DIR / "csv"))
+
+# The team library (see shared.py): a folder everyone on the team syncs, e.g. a folder
+# in the SUFST Teams/SharePoint site synced to this PC by OneDrive. Off unless set.
+SHARED_DIR = Path(os.environ["FS_SHARED_DIR"]) if os.environ.get("FS_SHARED_DIR") else None
+
+# Your name in the team library: the folder your shared runs go into. Your Windows
+# user name unless set, so set it if that isn't what the team knows you by.
+SHARED_NAME = os.environ.get("FS_SHARED_NAME") or getpass.getuser()
 
 TRACKS_DIRS = [DATA_DIR / "tracks", AC_DIR / "content" / "tracks"]
 

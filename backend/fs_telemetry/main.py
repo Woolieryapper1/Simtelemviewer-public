@@ -126,6 +126,44 @@ def list_sessions(
     return out
 
 
+# --- Team library: runs shared in a folder the whole team syncs (see shared.py) ---
+
+
+class TeamLibrary(BaseModel):
+    enabled: bool  # the folder is set and found
+    folder: str | None
+    me: str  # my folder's name in it
+    people: list[str]  # everyone with a folder in it
+
+
+@api.get("/team")
+def team_library() -> TeamLibrary:
+    lib = catalog.shared
+    return TeamLibrary(enabled=lib.enabled, folder=str(lib.root) if lib.root else None, me=lib.me, people=lib.people())
+
+
+def _team_call(fn, session_id: str) -> SessionSummary:
+    try:
+        s = fn(session_id)
+    except (ValueError, OSError) as e:
+        raise HTTPException(422, str(e))
+    if s is None:
+        raise HTTPException(404, f"No session '{session_id}'")
+    return s
+
+
+@api.post("/sessions/{session_id}/share")
+def share_session(session_id: str) -> SessionSummary:
+    """Copy one of my runs into my folder of the team library, so teammates see it."""
+    return _team_call(catalog.share, session_id)
+
+
+@api.delete("/sessions/{session_id}/share")
+def unshare_session(session_id: str) -> SessionSummary:
+    """Take one of my runs out of the team library (the copy on this PC stays)."""
+    return _team_call(catalog.unshare, session_id)
+
+
 @api.get("/sessions/{session_id}/channels")
 def list_channels(session_id: str) -> list[ChannelInfo]:
     s = _session(session_id)

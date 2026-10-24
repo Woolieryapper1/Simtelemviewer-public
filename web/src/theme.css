@@ -471,3 +471,7 @@ input.wide {
 .lap-item { position: relative; }
 .lap-item > .lap { padding-right: 32px; }
 .lap-item > .lap-edit { position: absolute; right: 5px; top: 8px; }
+
+/* Sharing the open run in the team library (ShareRun.jsx) */
+.share-run { flex-shrink: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 14px; }
+.share-run .error { flex-basis: 100%; }
