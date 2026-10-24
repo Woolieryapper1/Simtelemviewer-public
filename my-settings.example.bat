@@ -32,3 +32,12 @@ rem set FS_AC_SETUPS_DIR=C:\Users\YourName\Documents\Assetto Corsa\setups
 rem Where the app keeps its saved layouts, setup library and extra tracks and cars
 rem (default: a "FS Telemetry" folder in your user folder)
 rem set FS_DATA_DIR=D:\FS Telemetry
+
+rem The team library: a folder everyone on the team syncs, so you see each other's
+rem runs without sending files. In the SUFST Teams site, open the channel's Files,
+rem pick the folder and click "Add shortcut to My files" (or "Sync"); then use the
+rem folder it appears as in File Explorer here.
+rem set FS_SHARED_DIR=C:\Users\YourName\OneDrive - University of Southampton\SUFST Telemetry
+
+rem Your name in the team library (default: your Windows user name)
+rem set FS_SHARED_NAME=YourName

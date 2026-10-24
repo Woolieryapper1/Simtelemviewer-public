@@ -17,6 +17,7 @@ import webbrowser
 import uvicorn
 
 from . import config
+from .shared import folder_name
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -35,6 +36,8 @@ def main(argv: list[str] | None = None) -> None:
 
     url = f"http://127.0.0.1:{args.port}"
     found = lambda folder: "" if folder.exists() else "  (not found)"  # noqa: E731
+    team = (f"{config.SHARED_DIR}{found(config.SHARED_DIR)}  (you're {folder_name(config.SHARED_NAME)})"
+            if config.SHARED_DIR else "off (set FS_SHARED_DIR to share runs with the team)")
     # Say where everything is read from and saved to, so it's easy to check and find
     print(f"""
   FS Telemetry is starting at {url}
@@ -46,6 +49,7 @@ def main(argv: list[str] | None = None) -> None:
   AC install:       {config.AC_DIR}
   AC setups:        {config.AC_SETUPS_DIR}
   Saved data in:    {config.DATA_DIR}  (put extra track folders in its tracks folder)
+  Team library:     {team}
 """, flush=True)
     if not config.TELEMETRY_DIR.exists() and not config.IRACING_DIR.exists():
         print("  ! Neither telemetry folder exists - set FS_TELEMETRY_DIR or FS_IRACING_DIR "

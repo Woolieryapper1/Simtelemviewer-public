@@ -4,14 +4,20 @@ import { carCategory } from "./carCategories.js";
 import LapsBox from "./LapsBox.jsx";
 import RunNotes from "./RunNotes.jsx";
 import RunSearch, { EMPTY_SEARCH, isSearching, matchesSearch } from "./RunSearch.jsx";
-import { Chip, Select } from "./ui/index.js";
+import ShareRun from "./ShareRun.jsx";
+import { Chip, Segmented, Select } from "./ui/index.js";
 
 const GAME_LABELS = { ac: "Assetto Corsa", iracing: "iRacing", csv: "CSV imports" };
+const WHOSE = [{ value: "all", label: "All" }, { value: "mine", label: "Mine" }, { value: "team", label: "Team" }];
+const WHOSE_TEST = { all: () => true, mine: (s) => s.mine, team: (s) => !s.mine };
 
 const uniqueSorted = (list) => [...new Set(list)].sort();
 
 // Browse game, track and car in order; keep compared laps across filter changes.
-export default function RunDrawer({ hidden, sessions, openId, onOpen, selected, onToggleLap, notes, onEditNotes, onNotesImported }) {
+// With a team library, runs can be narrowed to mine or teammates' first.
+export default function RunDrawer({ hidden, sessions: allSessions, team, onShared, openId, onOpen, selected, onToggleLap, notes, onEditNotes, onNotesImported }) {
+  const [whose, setWhose] = useState("all");
+  const sessions = team?.enabled ? allSessions.filter(WHOSE_TEST[whose]) : allSessions;
   const [game, setGame] = useState("");
   const [category, setCategory] = useState("");
   const [track, setTrack] = useState("");
@@ -48,16 +54,21 @@ export default function RunDrawer({ hidden, sessions, openId, onOpen, selected, 
   }
 
   // What's still missing, so the empty box can say what to do next
-  const hint = !sessions.length ? "No runs found. Check the telemetry folders in my-settings.bat."
+  const hint = !allSessions.length ? "No runs found. Check the telemetry folders in my-settings.bat."
+    : !sessions.length ? (whose === "team" ? "No teammates have shared runs yet." : "None of these runs are yours.")
     : !gameValue ? "Choose a game to browse its tracks."
     : !pool.length ? "No runs match the search in this game."
     : !trackValue ? "Choose a track to see its cars."
     : !carsPicked.length ? "Choose a car to see its runs."
     : !shown.length ? "No runs match these filters." : "";
-  const open = sessions.find((s) => s.id === openId);
+  const open = allSessions.find((s) => s.id === openId);
 
   return (
     <aside className="drawer" hidden={hidden}>
+      {team?.enabled && <div className="filter">
+        <span>Runs</span>
+        <Segmented size="sm" label="Whose runs" options={WHOSE} value={whose} onChange={setWhose} />
+      </div>}
       <label className="filter">
         <span>Game</span>
         <Select className="block" value={gameValue} onChange={(e) => chooseGame(e.target.value)}>
@@ -119,10 +130,11 @@ ${note.notes}` : s.id}
                   <span className="run-time mono">{note?.star && <span className="star on">★</span>}{fmtTime(s.started)}</span>
                   <span className="run-laps">{s.valid_laps}/{s.lap_count} valid</span>
                   <span className="run-best mono">{fmtLap(s.best_lap_s)}</span>
-                  {/* Only say whose run / which car / which track when the list mixes them */}
-                  {(driversOn.length > 1 || carsPicked.length > 1 || mixedTracks) && (
+                  {/* Only say whose run / which car / which track when the list mixes them (and always a teammate's) */}
+                  {(!s.mine || driversOn.length > 1 || carsPicked.length > 1 || mixedTracks) && (
                     <span className="run-who">
-                      {[mixedTracks && s.track, driversOn.length > 1 && s.driver, carsPicked.length > 1 && s.car].filter(Boolean).join(" · ")}
+                      {[!s.mine && `Shared by ${s.owner}`, mixedTracks && s.track, driversOn.length > 1 && s.driver,
+                        carsPicked.length > 1 && s.car].filter(Boolean).join(" · ")}
                     </span>
                   )}
                   {note?.tags.length > 0 && <span className="run-tags">{note.tags.map((t) => <span key={t} className="tag">{t}</span>)}</span>}
@@ -133,6 +145,7 @@ ${note.notes}` : s.id}
         ))}
       </div>
 
+      {open && <ShareRun team={team} session={open} onChange={onShared} />}
       {open && <RunNotes key={open.key} session={open} note={notes[open.key]} notes={notes} onEdit={onEditNotes} onImported={onNotesImported} />}
       <LapsBox session={open} note={open && notes[open.key]} selected={selected} onToggle={onToggleLap}
         onEditLap={(lap, body) => onEditNotes(open, body, lap)} />

@@ -43,9 +43,12 @@ export default function App() {
 
   // Load the run list and the notes once when the app starts
   const loadNotes = () => api.notes().then(setNotes).catch((e) => setError(e.message));
+  const loadSessions = () => api.sessions().then(setSessions).catch((e) => setError(e.message));
+  const [team, setTeam] = useState(null); // the team library (see shared.py), if one is set
   useEffect(() => {
-    api.sessions().then(setSessions).catch((e) => setError(e.message));
+    loadSessions();
     loadNotes();
+    api.team().then(setTeam).catch(() => {});
   }, []);
 
   // Save a change to a run's notes (or one lap's), then keep the server's copy.
@@ -123,7 +126,7 @@ export default function App() {
 
       <div className="body">
         {/* Hidden rather than removed, so the filters are still set when it opens again */}
-        <RunDrawer hidden={!drawerOpen} sessions={sessions} openId={openId} onOpen={setOpenId}
+        <RunDrawer hidden={!drawerOpen} sessions={sessions} team={team} onShared={loadSessions} openId={openId} onOpen={setOpenId}
           selected={selected} onToggleLap={toggleLap} notes={notes} onEditNotes={editNotes} onNotesImported={loadNotes} />
         <main className="page">
           {error && <div className="error">Couldn't load runs: {error}</div>}

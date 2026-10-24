@@ -17,7 +17,8 @@ frontend in `web/`. It runs on the user's PC and uploads nothing.
 .ld/.ldx (AC)   .ibt (iRacing)   .csv
 ingest/motec_ld.py, ingest/csp.py, ingest/ibt.py, ingest/csv_import.py   (+ ingest/ac_track.py: track edges)
         |
-    catalog.py      finds and caches sessions in the configured folders (config.py)
+    catalog.py      finds and caches sessions in the configured folders (config.py),
+                    plus teammates' runs in the team library (shared.py)
         |
     maths.py        derived channels, computed when a session opens (fed by cars.py, aero.py)
         |
@@ -71,7 +72,13 @@ Shared UI pieces and design tokens live in `web/src/ui/` and `theme.css`.
 - User data (layouts, setup library, notes, CSV column mappings) is JSON in `FS_DATA_DIR`; any Markdown/CSV copies
   are generated from it and never read back.
 - Folder settings come from environment variables (`FS_TELEMETRY_DIR`, `FS_CSP_DIR`, `FS_IRACING_DIR`, `FS_CSV_DIR`,
-  `FS_AC_DIR`, `FS_AC_SETUPS_DIR`, `FS_DATA_DIR`), set per PC in `my-settings.bat`.
+  `FS_AC_DIR`, `FS_AC_SETUPS_DIR`, `FS_DATA_DIR`, `FS_SHARED_DIR`, `FS_SHARED_NAME`), set per PC in `my-settings.bat`.
+- Team library (`shared.py`): a folder the whole team syncs (e.g. Teams/SharePoint via OneDrive), one subfolder per
+  person that only they write in, so OneDrive never makes conflict copies. Each shared run has a `.summary.json`
+  next to it; the run list reads those so OneDrive doesn't download every run just to list it. Teammates' run ids
+  are `<name>~<file>`.
+- Synced folders are deep and AC/CSP file names long: open files through `shared.long_path` where a path can pass
+  Windows' 260-character limit.
 - UI text explains itself in hover text rather than in the README; keep new features the same way.
 
 ## Keep this file current
