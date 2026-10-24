@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from .config import CSV_DIR, IRACING_DIR, TELEMETRY_DIR
+from .config import CSP_DIR, CSV_DIR, IRACING_DIR, TELEMETRY_DIR
 from .ingest.csv_import import read_csv
 from .ingest.ibt import read_ibt
 from .ingest.motec_ld import LdSession, read_ld
@@ -82,8 +82,9 @@ def session_key(s: LdSession) -> str:
 
 class Catalog:
     def __init__(self, root: Path = TELEMETRY_DIR, iracing_root: Path | None = IRACING_DIR,
-                 csv_root: Path | None = CSV_DIR):
+                 csv_root: Path | None = CSV_DIR, csp_root: Path | None = CSP_DIR):
         self.root = root
+        self.csp_root = csp_root
         self.iracing_root = iracing_root
         self.csv_root = csv_root
         self._summaries: dict[Path, tuple[float, SessionSummary]] = {}
@@ -91,7 +92,7 @@ class Catalog:
         self._unreadable: dict[Path, float] = {}  # files that failed to read (by mtime), so we don't retry every time
 
     def _paths(self) -> dict[str, Path]:
-        found = [(self.root, "*.ld"), (self.iracing_root, "*.ibt"), (self.csv_root, "*.csv")]
+        found = [(self.root, "*.ld"), (self.csp_root, "*.ld"), (self.iracing_root, "*.ibt"), (self.csv_root, "*.csv")]
         return {p.stem: p for root, pattern in found if root and root.exists() for p in root.rglob(pattern)}
 
     def summaries(self) -> list[SessionSummary]:

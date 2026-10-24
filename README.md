@@ -47,14 +47,14 @@ The black window lists the folders it's using. The defaults ("Documents" is foun
 | What | Default folder | Setting |
 |---|---|---|
 | AC telemetry (`.ld` / `.ldx`) | `Documents\Assetto Corsa\apps\telemetrick\exported` | `FS_TELEMETRY_DIR` |
+| AC telemetry from CSP's logger | `Documents\Assetto Corsa\telemetry` | `FS_CSP_DIR` |
 | iRacing telemetry (`.ibt`) | `Documents\iRacing\telemetry` | `FS_IRACING_DIR` |
 | CSV telemetry | `FS Telemetry\csv` | `FS_CSV_DIR` |
 | AC install (track outlines) | `C:\Program Files (x86)\Steam\steamapps\common\assettocorsa` | `FS_AC_DIR` |
 | AC setups | `Documents\Assetto Corsa\setups` | `FS_AC_SETUPS_DIR` |
 | The app's saved data | `C:\Users\<you>\FS Telemetry` | `FS_DATA_DIR` |
 
-CSP's logger saves into `Documents\Assetto Corsa\telemetry`. To see those runs as well as telemetrick's, set
-`FS_TELEMETRY_DIR` to `Documents\Assetto Corsa` (it searches sub-folders, so it finds both). CSP doesn't log the car's
+Runs from telemetrick and from CSP's own logger both show up. CSP doesn't log the car's
 wheelbase, so Understeer Angle only shows for its runs if the car's steering ratio or wheelbase is known (`cars.py`
 or the car's unpacked AC files).
 

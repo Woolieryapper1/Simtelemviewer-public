@@ -12,10 +12,11 @@ rem  my-settings.bat is yours only - it's never uploaded to GitHub.
 rem  No quotes around the folder, even if it has spaces in it.
 rem ===========================================================================
 
-rem The folder with AC's .ld / .ldx files (sub-folders are searched too). telemetrick
-rem exports into Assetto Corsa\apps\telemetrick\exported, CSP's own logger into
-rem Assetto Corsa\telemetry: point it at the Assetto Corsa folder to get both.
+rem The folder telemetrick exports AC's .ld / .ldx files into (sub-folders are searched too)
 rem set FS_TELEMETRY_DIR=D:\Telemetry\exported
+
+rem The folder CSP's own telemetry logger saves into (default: Assetto Corsa\telemetry)
+rem set FS_CSP_DIR=D:\Telemetry\csp
 
 rem The folder iRacing saves .ibt telemetry files into
 rem set FS_IRACING_DIR=D:\iRacing\telemetry

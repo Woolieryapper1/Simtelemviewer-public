@@ -41,6 +41,7 @@ def main(argv: list[str] | None = None) -> None:
   Keep this window open while you use it; close it (or press Ctrl+C) to stop.
 
   AC telemetry:     {config.TELEMETRY_DIR}{found(config.TELEMETRY_DIR)}
+  AC (CSP logger):  {config.CSP_DIR}{found(config.CSP_DIR)}
   iRacing (.ibt):   {config.IRACING_DIR}{found(config.IRACING_DIR)}
   CSV telemetry:    {config.CSV_DIR}{found(config.CSV_DIR)}
   AC install:       {config.AC_DIR}
