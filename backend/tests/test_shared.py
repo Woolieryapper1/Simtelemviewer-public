@@ -26,7 +26,7 @@ def pc(tmp_path, team, me="nicolas", name="pc"):
     """A PC with its own CSV folder (which may have runs in it), using the team library."""
     csv = tmp_path / name / "csv"
     csv.mkdir(parents=True, exist_ok=True)
-    return Catalog(root=tmp_path / name / "none", iracing_root=None, csv_root=csv,
+    return Catalog(root=tmp_path / name / "none", iracing_root=None, csv_root=csv, csp_root=None,
                    shared=SharedLibrary(team, me)), csv
 
 

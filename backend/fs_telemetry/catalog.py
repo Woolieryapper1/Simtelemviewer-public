@@ -25,7 +25,7 @@ from dataclasses import dataclass, fields, replace
 from datetime import datetime
 from pathlib import Path
 
-from .config import CSV_DIR, IRACING_DIR, TELEMETRY_DIR
+from .config import CSP_DIR, CSV_DIR, IRACING_DIR, TELEMETRY_DIR
 from .ingest.csv_import import read_csv
 from .ingest.ibt import read_ibt
 from .ingest.motec_ld import LdSession, read_ld
@@ -87,8 +87,10 @@ def session_key(s: LdSession) -> str:
 
 class Catalog:
     def __init__(self, root: Path = TELEMETRY_DIR, iracing_root: Path | None = IRACING_DIR,
-                 csv_root: Path | None = CSV_DIR, shared: SharedLibrary | None = None):
+                 csv_root: Path | None = CSV_DIR, csp_root: Path | None = CSP_DIR,
+                 shared: SharedLibrary | None = None):
         self.root = root
+        self.csp_root = csp_root
         self.iracing_root = iracing_root
         self.csv_root = csv_root
         self.shared = shared or SharedLibrary()
@@ -98,7 +100,7 @@ class Catalog:
 
     def _paths(self) -> dict[str, tuple[Path, str | None]]:
         """Every run by id: (its file, whose folder of the team library it's in - None if it's on this PC)."""
-        found = [(self.root, "*.ld"), (self.iracing_root, "*.ibt"), (self.csv_root, "*.csv")]
+        found = [(self.root, "*.ld"), (self.csp_root, "*.ld"), (self.iracing_root, "*.ibt"), (self.csv_root, "*.csv")]
         paths = {p.stem: (p, None) for root, pattern in found if root and root.exists() for p in root.rglob(pattern)}
         paths.update({f"{owner}~{p.stem}": (p, owner) for owner, p in self.shared.runs()})
         return paths

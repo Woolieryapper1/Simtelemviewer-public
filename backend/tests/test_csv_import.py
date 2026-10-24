@@ -274,7 +274,7 @@ def api(tmp_path, monkeypatch):
 
     folder = tmp_path / "csv"
     folder.mkdir()
-    monkeypatch.setattr(main, "catalog", Catalog(root=tmp_path / "no-ld", iracing_root=None, csv_root=folder))
+    monkeypatch.setattr(main, "catalog", Catalog(root=tmp_path / "no-ld", iracing_root=None, csv_root=folder, csp_root=None))
     monkeypatch.setattr(sectors, "_cache", {})
     return TestClient(main.app), folder
 

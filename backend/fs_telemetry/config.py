@@ -42,11 +42,13 @@ def in_documents(*parts: str, setting: str) -> Path:
     )
 
 
-# Folder with AC's MoTeC .ld/.ldx files. By default where the telemetrick app exports
-# them; Custom Shaders Patch's own logger saves into Assetto Corsa/telemetry instead,
-# so point this at the Assetto Corsa folder to get both.
+# Folder with AC's MoTeC .ld/.ldx files from the telemetrick app (where it exports them).
 # Searched recursively, so <driver>/<car>/<track>/ sub-folders are fine.
 TELEMETRY_DIR = in_documents("Assetto Corsa", "apps", "telemetrick", "exported", setting="FS_TELEMETRY_DIR")
+
+# Folder Custom Shaders Patch's own telemetry logger saves its .ld files into
+# (<track>/<car>/ sub-folders), read as well as telemetrick's.
+CSP_DIR = in_documents("Assetto Corsa", "telemetry", setting="FS_CSP_DIR")
 
 # Folder iRacing saves its .ibt telemetry files into (searched recursively too):
 # iRacing\telemetry in Documents, wherever Documents is on this PC.
