@@ -195,21 +195,42 @@ def damper_channels(s: LdSession) -> dict[str, str]:
     return out
 
 
-def _lap_samples(s: LdSession, lap_number: int, names: dict[str, str], gate_at, gate: int | None) -> dict[str, np.ndarray]:
+def gate_filter(chosen: list[tuple[LapRef, LdSession, list[int]]], gate_name: str, gating: MetricSettings):
+    """None for the whole lap, else keep(s, lap_number, t) -> which of the session times t (during that lap)
+    are in the gate. Gates come from the reference lap (the first chosen) by distance, the same as the
+    Metrics page, so every lap is judged over the same bits of track."""
+    if gate_name == "all":
+        return None
+    ref, ref_s = chosen[0][0], chosen[0][1]
+    missing = [c for c in NEEDED if c not in ref_s.channels]
+    if missing:
+        raise CompareError(f"Can't pick out gates: the reference lap has no {', '.join(missing)} channel(s)")
+    r = resample_lap(ref_s, ref.lap, NEEDED, STEP_M)
+    ref_gate = classify(r["Ground Speed"], r["Throttle Pos"], r["Brake Pos"], r["CG Accel Lateral"], gating)
+    gate = GATES.index(gate_name)
+
+    def keep(s: LdSession, lap_number: int, t: np.ndarray) -> np.ndarray:
+        # Each sample's distance round the lap, via its time into the lap (as compare.py does for racing lines)
+        grid = resample_lap(s, lap_number, [], STEP_M)
+        if len(grid["Distance"]) < 2:
+            return np.zeros(len(t), bool)
+        distance = np.interp(t - s.laps[lap_number - 1].start, grid["Time"], grid["Distance"])
+        return ref_gate[np.clip(np.searchsorted(r["Distance"], distance), 0, len(ref_gate) - 1)] == gate
+
+    return keep
+
+
+def _lap_samples(s: LdSession, lap_number: int, names: dict[str, str], keep) -> dict[str, np.ndarray]:
     """The four corners' damper velocity during one lap, on the FL channel's clock,
-    keeping only the samples in `gate` (all of them if gate is None)."""
+    keeping only the samples in the gate (all of them if keep is None, see gate_filter)."""
     lap = s.laps[lap_number - 1]
     clock = s.channels[names["FL"]]
     m = (clock.time >= lap.start) & (clock.time < lap.end)
     t = clock.time[m]
     out = {c: np.interp(t, s.channels[n].time, s.channels[n].data) for c, n in names.items()}
-    if gate is not None:
-        # Each sample's distance round the lap, via its time into the lap (as compare.py does for racing lines)
-        grid = resample_lap(s, lap_number, [], STEP_M)
-        if len(grid["Distance"]) < 2:
-            return {c: v[:0] for c, v in out.items()}
-        keep = gate_at(np.interp(t - lap.start, grid["Time"], grid["Distance"])) == gate
-        out = {c: v[keep] for c, v in out.items()}
+    if keep is not None:
+        k = keep(s, lap_number, t)
+        out = {c: v[k] for c, v in out.items()}
     return out
 
 
@@ -230,25 +251,12 @@ def _selections(catalog: Catalog, refs: list[LapRef], scope: str) -> list[tuple[
 def compute_dampers(catalog: Catalog, refs: list[LapRef], st: DamperSettings, gating: MetricSettings) -> Dampers:
     chosen = _selections(catalog, refs, st.scope)
     names = {ref.session_id: damper_channels(s) for ref, s, _ in chosen}
-
-    gate, gate_at = None, None
-    if st.gate != "all":
-        # Gates from the reference lap, by distance - the same as the Metrics page
-        ref, ref_s = chosen[0][0], chosen[0][1]
-        missing = [c for c in NEEDED if c not in ref_s.channels]
-        if missing:
-            raise CompareError(f"Can't pick out gates: the reference lap has no {', '.join(missing)} channel(s)")
-        r = resample_lap(ref_s, ref.lap, NEEDED, STEP_M)
-        ref_gate = classify(r["Ground Speed"], r["Throttle Pos"], r["Brake Pos"], r["CG Accel Lateral"], gating)
-        gate = GATES.index(st.gate)
-
-        def gate_at(distance: np.ndarray) -> np.ndarray:
-            return ref_gate[np.clip(np.searchsorted(r["Distance"], distance), 0, len(ref_gate) - 1)]
+    keep = gate_filter(chosen, st.gate, gating)
 
     # Every selection's samples first, so all the histograms can share one set of bins
     picked = []
     for ref, s, laps in chosen:
-        laps_samples = [_lap_samples(s, n, names[ref.session_id], gate_at, gate) for n in laps]
+        laps_samples = [_lap_samples(s, n, names[ref.session_id], keep) for n in laps]
         corners = {c: np.concatenate([x[c] for x in laps_samples]) for c in CORNERS}
         picked.append(signals(corners))
     edges = histogram_edges([sig[c] for sig in picked for c in CORNERS], st.bin_mm_s)

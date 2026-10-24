@@ -51,7 +51,7 @@ def with_camber(s, camber, load):
 
 
 def run(cat, *refs, data_dir=None, **settings):
-    return compute_camber(cat, [LapRef.parse(r) for r in refs], CamberSettings(**settings), data_dir)
+    return compute_camber(cat, [LapRef.parse(r) for r in refs], CamberSettings(**settings), data_dir=data_dir)
 
 
 # --- The tyre ---------------------------------------------------------------------------
@@ -139,6 +139,36 @@ def test_end_to_end_on_a_fake_run():
     assert front.best_offset_deg == pytest.approx(-2.1) and rear.best_offset_deg == pytest.approx(-1.1)
     assert front.current_pct < front.best_pct and not front.at_limit
     assert [c.mean_deg for c in sel.corners] == [-1, -1, -2, -2]
+
+
+def by_distance(s, name, near, far, split_m):
+    """Set a channel (on the Lap Distance clock) to `near` over the first split_m metres of every lap, else `far`."""
+    d = s.channels["Lap Distance"].data
+    s.channels[name] = Channel(name, s.channels[name].unit, s.channels[name].freq, np.where(d < split_m, near, far).astype(float))
+
+
+def test_gate_counts_only_that_part_of_the_lap():
+    s = with_camber(fake_session(brake_until_m=300), dict.fromkeys(["FL", "FR", "RL", "RR"], -3), dict.fromkeys(["FL", "FR", "RL", "RR"], 3000))
+    by_distance(s, "Camber FL", -1, -3, 300)  # FL runs -1 while braking, -3 everywhere else
+    cat = FakeCatalog(A=s)
+    whole, braking = (run(cat, "A:2", gate=g, **TYPED).selections[0] for g in ("all", "Braking"))
+    assert braking.corners[0].mean_deg == pytest.approx(-1, abs=0.05)
+    assert whole.corners[0].mean_deg == pytest.approx(-2.4, abs=0.05)  # 30% of the lap at -1, 70% at -3
+    assert braking.time_s == pytest.approx(0.3 * whole.time_s, rel=0.03)
+
+
+def test_g_band_and_peak_percentile():
+    s = with_camber(fake_session(), dict.fromkeys(["FL", "FR", "RL", "RR"], -3), dict.fromkeys(["FL", "FR", "RL", "RR"], 3000))
+    by_distance(s, "CG Accel Lateral", 0.9, 1.5, 700)  # 70% of the lap at 0.9 g, 30% at 1.5 g
+    by_distance(s, "Camber FL", -1, -3, 700)
+    cat = FakeCatalog(A=s)
+    near_peak = run(cat, "A:2", **TYPED).selections[0]  # >= 0.6 x 1.5 g: everything
+    below = run(cat, "A:2", max_g=0.8, **TYPED).selections[0]  # 0.9..1.2 g: only the 0.9 g part
+    assert near_peak.peak_g == pytest.approx(1.5) and near_peak.corners[0].mean_deg == pytest.approx(-1.6, abs=0.05)
+    assert below.corners[0].mean_deg == pytest.approx(-1, abs=0.01)
+    assert run(cat, "A:2", peak_pct=50, **TYPED).selections[0].peak_g == pytest.approx(0.9)
+    with pytest.raises(ValidationError):
+        CamberSettings(min_g=0.6, max_g=0.5)
 
 
 def test_best_beyond_the_range_is_flagged():

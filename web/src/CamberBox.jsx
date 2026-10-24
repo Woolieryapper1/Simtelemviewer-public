@@ -8,9 +8,12 @@ import { Checkbox, Input, Segmented, Select } from "./ui/index.js";
 // Camber optimiser box on the Metrics page (AC only): the camber each wheel really ran
 // near the limit, scored against the tyre's camber curve from tyres.ini (or typed-in
 // DCAMBER numbers), and the static camber change per axle that scores best.
-// Its options are remembered in this browser.
+// What counts as "near the limit" can be narrowed to one corner gate or a band of
+// G, e.g. to look at corner entry rather than the apex. Its options are
+// remembered in this browser.
 
-const DEFAULTS = { scope: "run", minG: 0.6, compound: "", typed: false, f0: "", f1: "", r0: "", r1: "" };
+const GATE_OPTIONS = ["all", "Braking", "LS", "MS", "HS", "Power limited"];
+const DEFAULTS = { scope: "run", gate: "all", peakPct: 98, minG: 0.6, maxG: "", compound: "", typed: false, f0: "", f1: "", r0: "", r1: "" };
 const STORAGE_KEY = "camberOptions";
 
 function loadOptions() {
@@ -18,8 +21,8 @@ function loadOptions() {
   catch { return { ...DEFAULTS }; }
 }
 
-// laps: the compared timed laps ({ sessionId, lap, slot, shortLabel, driver })
-export default function CamberBox({ laps }) {
+// laps: the compared timed laps ({ sessionId, lap, slot, shortLabel, driver }); settings: the metric definitions (for gates)
+export default function CamberBox({ laps, settings }) {
   const [opts, setOpts] = useState(loadOptions);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -32,18 +35,22 @@ export default function CamberBox({ laps }) {
   // Typed tyre numbers are only sent once a whole axle pair is filled in, DCAMBER_1 negative
   const pair = (a, b) => (a !== "" && b !== "" && Number(b) < 0 ? [Number(a), Number(b)] : null);
   const front = opts.typed ? pair(opts.f0, opts.f1) : null, rear = opts.typed ? pair(opts.r0, opts.r1) : null;
+  // The upper G limit only counts once it's above the lower one
+  const maxG = opts.maxG !== "" && Number(opts.maxG) > opts.minG ? Number(opts.maxG) : "";
+  const peakOk = opts.peakPct !== "" && Number(opts.peakPct) >= 50 && Number(opts.peakPct) <= 100;
+  const peakPct = peakOk ? Number(opts.peakPct) : DEFAULTS.peakPct;
   const request = {
-    scope: opts.scope, min_g: opts.minG, compound: opts.compound,
+    scope: opts.scope, gate: opts.gate, peak_pct: peakPct, min_g: opts.minG, max_g: maxG, compound: opts.compound,
     ...(front ? { front_dcamber0: front[0], front_dcamber1: front[1] } : {}),
     ...(rear ? { rear_dcamber0: rear[0], rear_dcamber1: rear[1] } : {}),
   };
 
-  const key = JSON.stringify([laps.map((l) => l.key), request]);
+  const key = JSON.stringify([laps.map((l) => l.key), settings, request]);
   useEffect(() => {
     if (!laps.length) return;
     let stale = false;
     setError(null);
-    api.camber(laps, request)
+    api.camber(laps, settings, request)
       .then((d) => !stale && setResult({ key, d }))
       .catch((e) => !stale && setError(e.message));
     return () => { stale = true; };
@@ -69,10 +76,21 @@ export default function CamberBox({ laps }) {
       <div className="toolbar pad damper-tools">
         <Segmented label="What to count" value={opts.scope} onChange={(scope) => change({ scope })}
           options={[{ value: "lap", label: "Each lap" }, { value: "run", label: "Whole run", title: "Every full timed lap" }]} />
-        <label className="field band-inputs" title="Only count moments using at least this share of the run's peak combined G">
-          Near the limit ≥ <Input size="sm" aria-label="Share of peak G" type="number" min="0" max="1" step="0.05"
-            value={opts.minG} onChange={(e) => e.target.value !== "" && change({ minG: Number(e.target.value) })} /> × peak G
+        <label className="field">Only
+          <Select size="sm" value={opts.gate} onChange={(e) => change({ gate: e.target.value })}>
+            {GATE_OPTIONS.map((g) => <option key={g} value={g}>{g === "all" ? "the whole lap" : g}</option>)}
+          </Select>
         </label>
+        <span className="field band-inputs" title="Only count moments whose combined G is in this band. Peak G is this percentile of combined G over the whole laps (below 100 ignores kerb spikes). Leave the upper limit empty for no limit; e.g. 0.4 to 0.8 looks at corner entry and exit rather than the apex.">
+          <Input size="sm" aria-label="Lower share of peak G" type="number" min="0" max="1" step="0.05"
+            value={opts.minG} onChange={(e) => e.target.value !== "" && change({ minG: Number(e.target.value) })} /> to
+          <Input size="sm" aria-label="Upper share of peak G (empty: no limit)" type="number" min="0" max="2" step="0.05" placeholder="max"
+            value={opts.maxG} onChange={(e) => change({ maxG: e.target.value })} /> × peak G · peak =
+          <Input size="sm" aria-label="Percentile of combined G that counts as peak" type="number" min="50" max="100" step="1"
+            value={opts.peakPct} onChange={(e) => change({ peakPct: e.target.value })} />th percentile
+        </span>
+        {opts.maxG !== "" && maxG === "" && <span className="bad-text">Upper limit must be above the lower</span>}
+        {!peakOk && <span className="bad-text">Peak percentile: 50 to 100 (using {DEFAULTS.peakPct})</span>}
         {compounds.length > 1 && (
           <label className="field">Compound
             <Select size="sm" value={opts.compound} onChange={(e) => change({ compound: e.target.value })}>
@@ -92,7 +110,10 @@ export default function CamberBox({ laps }) {
       </div>
       {error && <div className="error pad">{error}</div>}
       {!d && !error && <div className="box-empty">Loading…</div>}
-      {d && !error && (
+      {d && !error && d.selections.every((s) => s.time_s === 0) && (
+        <div className="box-empty">Nothing to count: no {opts.gate === "all" ? "" : `${opts.gate} `}running in that G band</div>
+      )}
+      {d && !error && !d.selections.every((s) => s.time_s === 0) && (
         <>
           <div className="note">{d.note}</div>
           <div className="damper-body">
@@ -116,7 +137,7 @@ function CamberTable({ d, sels }) {
             {d.selections.map((s, i) => (
               <th key={i} colSpan={3} className="group">
                 <span className="lap-dot" style={{ background: `var(--lap-${sels[i].slot + 1})` }} /> {sels[i].label}
-                <div className="muted small">{num(s.time_s, 1)} s near the limit · {s.compound}</div>
+                <div className="muted small">{num(s.time_s, 1)} s counted · peak {num(s.peak_g, 2)} g · {s.compound}</div>
               </th>
             ))}
           </tr>

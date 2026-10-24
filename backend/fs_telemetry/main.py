@@ -260,17 +260,21 @@ def damper_setup(q: Annotated[DamperSetupQuery, Query()]) -> DamperSetup:
         raise HTTPException(422, str(e))
 
 
-class CamberQuery(CamberSettings):
-    lap: list[str] = Field(description="Laps as '<session id>:<lap number>'.")
+class CamberQuery(CamberSettings, MetricSettings):
+    # Gate definitions come from the same settings as /metrics, as for DampersQuery
+    lap: list[str] = Field(description="Laps as '<session id>:<lap number>'. The first is the reference (and sets the gates).")
 
 
 @api.get("/camber")
 def camber(q: Annotated[CamberQuery, Query()]) -> Camber:
-    """Best static camber change per axle (AC only): the logged camber while near the limit, scored against
-    the tyre's camber curve from tyres.ini (or typed-in DCAMBER numbers), weighted by tyre load."""
+    """Best static camber change per axle (AC only): the logged camber while near the limit (optionally only
+    in one Metrics gate or G band), scored against the tyre's camber curve from tyres.ini (or typed-in
+    DCAMBER numbers), weighted by tyre load."""
+    data = q.model_dump(exclude={"lap"})
     try:
-        settings = CamberSettings(**q.model_dump(exclude={"lap"}))
-        return compute_camber(catalog, [LapRef.parse(x) for x in q.lap], settings)
+        settings = CamberSettings(**{k: data[k] for k in CamberSettings.model_fields})
+        gating = MetricSettings(**{k: data[k] for k in MetricSettings.model_fields})
+        return compute_camber(catalog, [LapRef.parse(x) for x in q.lap], settings, gating)
     except CompareError as e:
         raise HTTPException(422, str(e))
 

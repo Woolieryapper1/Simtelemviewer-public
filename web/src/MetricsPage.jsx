@@ -79,7 +79,7 @@ export default function MetricsPage({ laps: allLaps, settings, onSettings, compa
 
   if (!laps.length) return <>{defs}<div className="empty">Tick full timed laps in the drawer to compare their metrics</div></>;
   if (section === "dampers") return <>{defs}<DamperBox laps={laps} settings={settings} /><DamperSetupBox laps={laps} /></>;
-  if (section === "camber") return <>{defs}<CamberBox laps={laps} /></>;
+  if (section === "camber") return <>{defs}<CamberBox laps={laps} settings={settings} /></>;
   if (error) return <>{defs}<div className="error">{error}</div></>;
   if (!m) return <>{defs}<div className="empty">Loading…</div></>;
   // Match each result to its compared lap (for colours and names). While new

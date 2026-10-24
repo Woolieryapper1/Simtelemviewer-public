@@ -43,10 +43,11 @@ export const api = {
     for (const [k, v] of Object.entries({ ...settings, ...options })) q.set(k, v);
     return getJSON(`/api/dampers?${q}`);
   },
-  // options: { scope, min_g, compound, front_dcamber0, ... } (see backend camber.py CamberSettings)
-  camber: (laps, options) => {
+  // options: { scope, gate, peak_pct, min_g, max_g, compound, front_dcamber0, ... } (see backend camber.py
+  // CamberSettings); settings: the metric definitions (they set the gates)
+  camber: (laps, settings, options) => {
     const q = new URLSearchParams(laps.map((l) => ["lap", `${l.sessionId}:${l.lap}`]));
-    for (const [k, v] of Object.entries(options)) if (v !== "" && v != null) q.set(k, v);
+    for (const [k, v] of Object.entries({ ...settings, ...options })) if (v !== "" && v != null) q.set(k, v);
     return getJSON(`/api/camber?${q}`);
   },
   // options: { scope, setup_id, ls_bump, ... } (see backend damper_setup.py DamperSetupSettings)
