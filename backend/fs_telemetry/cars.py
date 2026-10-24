@@ -59,6 +59,20 @@ def _ini_number(path: Path, key: str) -> float | None:
     return abs(float(m.group(1))) or None  # 0 counts as "not given"
 
 
+def read_ini(text: str) -> dict[str, dict[str, str]]:
+    """AC .ini text -> {SECTION: {KEY: value}}, ignoring ';' comments. Later duplicates win."""
+    out: dict[str, dict[str, str]] = {}
+    section = None
+    for line in text.splitlines():
+        line = line.split(";", 1)[0].strip()
+        if m := re.fullmatch(r"\[([^\]]+)\]", line):
+            section = out.setdefault(m.group(1).strip().upper(), {})
+        elif section is not None and "=" in line:
+            k, v = line.split("=", 1)
+            section[k.strip().upper()] = v.strip()
+    return out
+
+
 def ac_data_dir(car: str) -> Path | None:
     """The car's unpacked AC data folder (first match in CARS_DIRS), or None."""
     if not car or any(c in car for c in "/\\:") or ".." in car:

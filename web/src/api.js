@@ -49,6 +49,12 @@ export const api = {
     for (const [k, v] of Object.entries(options)) if (v !== "" && v != null) q.set(k, v);
     return getJSON(`/api/camber?${q}`);
   },
+  // options: { scope, setup_id, ls_bump, ... } (see backend damper_setup.py DamperSetupSettings)
+  damperSetup: (laps, options) => {
+    const q = new URLSearchParams(laps.map((l) => ["lap", `${l.sessionId}:${l.lap}`]));
+    for (const [k, v] of Object.entries(options)) if (v !== "" && v != null) q.set(k, v);
+    return getJSON(`/api/damper-setup?${q}`);
+  },
   lapData: (id, lap, channels, stepM) => getJSON(lapUrl(id, lap, "data", channels, stepM)),
   csvUrl: (id, lap, channels, stepM) => lapUrl(id, lap, "data.csv", channels, stepM),
   compare: (laps, sectors) => getJSON(compareUrl("compare", laps, sectors)),

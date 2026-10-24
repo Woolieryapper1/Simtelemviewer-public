@@ -36,14 +36,13 @@ this is AC only.
 from __future__ import annotations
 
 import math
-import re
 from pathlib import Path
 from typing import Literal
 
 import numpy as np
 from pydantic import BaseModel, Field, model_validator
 
-from .cars import ac_data_dir
+from .cars import ac_data_dir, read_ini
 from .catalog import Catalog
 from .compare import CompareError, LapRef
 from .dampers import _selections
@@ -125,20 +124,6 @@ class Camber(BaseModel):
 
 
 # --- The tyre ---------------------------------------------------------------------
-
-
-def read_ini(text: str) -> dict[str, dict[str, str]]:
-    """AC .ini text -> {SECTION: {KEY: value}}, ignoring ';' comments. Later duplicates win."""
-    out: dict[str, dict[str, str]] = {}
-    section = None
-    for line in text.splitlines():
-        line = line.split(";", 1)[0].strip()
-        if m := re.fullmatch(r"\[([^\]]+)\]", line):
-            section = out.setdefault(m.group(1).strip().upper(), {})
-        elif section is not None and "=" in line:
-            k, v = line.split("=", 1)
-            section[k.strip().upper()] = v.strip()
-    return out
 
 
 def camber_grip(camber_deg, d0: float, d1: float):

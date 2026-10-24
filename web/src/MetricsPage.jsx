@@ -4,6 +4,7 @@ import Arrange from "./Arrange.jsx";
 import { drawBalance, drawGateMap, drawGG, drawMech } from "./charts.js";
 import CamberBox from "./CamberBox.jsx";
 import DamperBox from "./DamperBox.jsx";
+import DamperSetupBox from "./DamperSetupBox.jsx";
 import Definitions from "./Definitions.jsx";
 import { fmtLap, num, shortLabel, signed } from "./format.js";
 import Plot from "./Plot.jsx";
@@ -70,14 +71,14 @@ export default function MetricsPage({ laps: allLaps, settings, onSettings, compa
       ]} />
       <span className="muted">{section === "overview" ? "Corner gates, driving inputs and lap summaries"
         : section === "balance" ? "Dynamic balance and estimated mechanical balance"
-        : section === "dampers" ? "Damper speeds by lap, run or corner gate"
+        : section === "dampers" ? "Damper speeds by lap, run or corner gate, and damping ratios vs targets"
         : "Best static camber per axle from the tyre's camber curve (AC)"}</span>
     </div>
     <Definitions settings={settings} onChange={onSettings} summary={summary} />
   </>;
 
   if (!laps.length) return <>{defs}<div className="empty">Tick full timed laps in the drawer to compare their metrics</div></>;
-  if (section === "dampers") return <>{defs}<DamperBox laps={laps} settings={settings} /></>;
+  if (section === "dampers") return <>{defs}<DamperBox laps={laps} settings={settings} /><DamperSetupBox laps={laps} /></>;
   if (section === "camber") return <>{defs}<CamberBox laps={laps} /></>;
   if (error) return <>{defs}<div className="error">{error}</div></>;
   if (!m) return <>{defs}<div className="empty">Loading…</div></>;
