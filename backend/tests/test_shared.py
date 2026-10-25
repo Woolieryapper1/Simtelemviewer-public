@@ -149,3 +149,17 @@ def test_paths_over_windows_limit_still_work(tmp_path):
     theirs, _ = pc(tmp_path, team, me="andreas", name="their pc")
     (s,) = theirs.summaries()
     assert s.id == f"nicolas~{name}" and theirs.get(s.id).laps
+
+
+def test_a_teammates_saved_summary_gets_the_tidied_track_name(tmp_path, monkeypatch):
+    """An older app saved the track as the file had it (layout stuck on the end):
+    listed under the track folder's name, like the same track's runs on this PC."""
+    from fs_telemetry import catalog
+
+    (tmp_path / "tracks" / "sportsland_sugo_mts" / "sugo" / "data").mkdir(parents=True)
+    monkeypatch.setattr(catalog, "TRACKS_DIRS", [tmp_path / "tracks"])
+    saved = dict(id="run", key="k", source="ac", driver="Teammate", car="tatuusfa1", track="sportsland_sugo_mtssugo",
+                 started=None, duration_s=1.0, track_length_m=3520.6, lap_count=1, valid_laps=0,
+                 best_lap_s=None, best_lap_number=None)
+    assert catalog._from_saved(saved).track == "sportsland_sugo_mts"
+    assert catalog._from_saved({**saved, "source": "iracing"}).track == "sportsland_sugo_mtssugo"  # AC names only

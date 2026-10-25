@@ -79,6 +79,11 @@ Shared UI pieces and design tokens live in `web/src/ui/` and `theme.css`.
   are `<name>~<file>`.
 - Synced folders are deep and AC/CSP file names long: open files through `shared.long_path` where a path can pass
   Windows' 260-character limit.
+- Loggers don't all name a track the same way: one CSP writes the track folder (`sportsland_sugo_mts`), another the
+  folder with the layout stuck on the end (`sportsland_sugo_mtssugo`). `ac_track.canonical_track` turns AC names into
+  the installed folder's name (or a hand-made alias from `track_aliases.json` in `FS_DATA_DIR`) when a run is read,
+  and for teammates' saved summaries. `session_key` still hashes the name as logged (`logged_track`), so notes keys
+  never change.
 - UI text explains itself in hover text rather than in the README; keep new features the same way.
 
 ## Keep this file current

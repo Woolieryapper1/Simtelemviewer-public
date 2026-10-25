@@ -62,6 +62,12 @@ def test_the_key_ignores_the_file_name_but_not_the_run():
     assert session_key(_session("x/odd.ld", date="", time="")) == "file-odd"  # no start time: fall back to the file
 
 
+def test_tidying_the_track_name_keeps_the_key():
+    """Notes are filed under keys made before track names were tidied up, from the name in the file."""
+    as_logged = session_key(_session("run1.ld", track="sportsland_sugo_mtssugo"))
+    assert session_key(_session("run1.ld", track="sportsland_sugo_mts", logged_track="sportsland_sugo_mtssugo")) == as_logged
+
+
 def test_tags_are_tidied():
     assert clean_tags([" Race  Sim", "race sim", "WET", "", "quali"]) == ["race sim", "wet", "quali"]
 

@@ -5,7 +5,7 @@ import struct
 import numpy as np
 import pytest
 
-from fs_telemetry.ingest.ac_track import align_to_lap, find_layouts, read_fast_lane
+from fs_telemetry.ingest.ac_track import align_to_lap, canonical_track, find_layouts, read_fast_lane, track_aliases
 
 R = 100.0  # circle radius, m
 N = 400
@@ -66,3 +66,37 @@ def test_alignment_finds_the_axis_mapping_and_rejects_other_tracks(tmp_path):
     assert a.mapping == "x,-z" and a.median_gap_m < 2.5
     # A lap from somewhere else entirely doesn't match
     assert align_to_lap({"trk": g}, lap_x + 500, lap_y) is None
+
+
+def _install(root, track, *layouts):
+    """A track folder with layout sub-folders (each with data/, as AC's have), plus
+    the ui/ folder every track has."""
+    (root / track / "ui").mkdir(parents=True)
+    for layout in layouts:
+        (root / track / layout / "data").mkdir(parents=True)
+
+
+def test_one_name_per_track(tmp_path):
+    _install(tmp_path, "sportsland_sugo_mts", "sugo", "sugo_west")
+    _install(tmp_path, "micevec_vfsaa", "vfsaa", "vfsaa25")
+    dirs = [tmp_path / "not_there", tmp_path]
+    assert canonical_track("sportsland_sugo_mts", dirs, {}) == "sportsland_sugo_mts"
+    # Some loggers stick the layout straight on the end of the folder name
+    assert canonical_track("sportsland_sugo_mtssugo", dirs, {}) == "sportsland_sugo_mts"
+    assert canonical_track("sportsland_sugo_mtssugo_west", dirs, {}) == "sportsland_sugo_mts"
+    # ...but only a real layout counts, and a name that is a folder is left alone
+    assert canonical_track("sportsland_sugo_mtsui", dirs, {}) == "sportsland_sugo_mtsui"
+    assert canonical_track("micevec_vfsaa", dirs, {}) == "micevec_vfsaa"
+    # Not installed here: left as the file has it, unless an alias says otherwise
+    assert canonical_track("elsewherelayout", dirs, {}) == "elsewherelayout"
+    assert canonical_track("elsewherelayout", dirs, {"elsewherelayout": "elsewhere"}) == "elsewhere"
+    assert canonical_track("", dirs, {}) == ""
+
+
+def test_aliases_come_from_the_data_folder(tmp_path):
+    f = tmp_path / "track_aliases.json"
+    assert track_aliases(f) == {}  # none yet
+    f.write_text('{"sugo2": "sportsland_sugo_mts"}', encoding="utf-8")
+    assert track_aliases(f) == {"sugo2": "sportsland_sugo_mts"}
+    f.write_text("not json", encoding="utf-8")
+    assert track_aliases(f) == {}

@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from .catalog import Catalog
 from .config import TRACKS_DIRS
-from .ingest.ac_track import AlignedTrack, align_to_lap, find_layouts, read_fast_lane
+from .ingest.ac_track import ALIASES_FILE, AlignedTrack, align_to_lap, find_layouts, read_fast_lane
 from .ingest.motec_ld import LdSession
 from .laps import LapInfo, lap_infos, resample_lap, track_length
 from .sectors import sector_boundaries, split_times
@@ -178,7 +178,9 @@ def load_timed_laps(catalog: Catalog, refs: list[LapRef]) -> list[tuple[LapRef, 
         loaded.append((ref, s, info))
     tracks = {s.track for _, s, _ in loaded}
     if len(tracks) > 1:
-        raise CompareError(f"Laps are from different tracks: {', '.join(sorted(tracks))}")
+        raise CompareError(f"Laps are from different tracks: {', '.join(sorted(tracks))}. If they're one track "
+                           f'named two ways, add {{"other name": "track folder name"}} to {ALIASES_FILE} '
+                           "and restart the app")
     return loaded
 
 
