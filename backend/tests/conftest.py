@@ -13,6 +13,14 @@ def csv_mappings_in_temp_folder(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def run_summaries_in_temp_folder(tmp_path, monkeypatch):
+    """Listing runs saves their summaries in the app's data folder: never the real one."""
+    from fs_telemetry import catalog
+
+    monkeypatch.setattr(catalog, "CACHE_FILE", tmp_path / "run_summaries.json")
+
+
+@pytest.fixture(autouse=True)
 def no_track_aliases(tmp_path, monkeypatch):
     """Don't let the real data folder's track_aliases.json change what tests read."""
     from fs_telemetry.ingest import ac_track

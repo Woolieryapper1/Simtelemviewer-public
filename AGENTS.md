@@ -18,7 +18,8 @@ frontend in `web/`. It runs on the user's PC and uploads nothing.
 ingest/motec_ld.py, ingest/csp.py, ingest/ibt.py, ingest/csv_import.py   (+ ingest/ac_track.py: track edges)
         |
     catalog.py      finds and caches sessions in the configured folders (config.py),
-                    plus teammates' runs in the team library (shared.py)
+                    plus teammates' runs in the team library (shared.py); run summaries are
+                    saved in FS_DATA_DIR/run_summaries.json so a restart doesn't re-read every run
         |
     maths.py        derived channels, computed when a session opens (fed by cars.py, aero.py)
         |
@@ -79,6 +80,10 @@ Shared UI pieces and design tokens live in `web/src/ui/` and `theme.css`.
   are `<name>~<file>`.
 - Synced folders are deep and AC/CSP file names long: open files through `shared.long_path` where a path can pass
   Windows' 260-character limit.
+- Saved run summaries (`catalog.CACHE_FILE`) are reused while the file's time and size match and
+  `catalog.summaries_version()` doesn't change. That hashes the code that reads runs and splits laps (`ingest/`,
+  `laps.py`, `catalog.py`), the installed track folders and the track aliases, so changing any of them re-reads every
+  run once on the next start. If a summary starts depending on anything else, add it there, or the list goes stale.
 - Loggers don't all name a track the same way: one CSP writes the track folder (`sportsland_sugo_mts`), another the
   folder with the layout stuck on the end (`sportsland_sugo_mtssugo`). `ac_track.canonical_track` turns AC names into
   the installed folder's name (or a hand-made alias from `track_aliases.json` in `FS_DATA_DIR`) when a run is read,
