@@ -97,7 +97,7 @@ class SharedLibrary:
                 _copy(long_path(f), long_path(self.my_runs / f.name))
         data = asdict(summary)
         data["started"] = summary.started.isoformat() if summary.started else None
-        _write(long_path(summary_path(target)), json.dumps(data, indent=1))
+        write_atomic(long_path(summary_path(target)), json.dumps(data, indent=1))
         return target
 
     def unshare(self, run: Path) -> None:
@@ -120,7 +120,8 @@ def _copy(src: Path, dst: Path) -> None:
         raise
 
 
-def _write(dst: Path, text: str) -> None:
+def write_atomic(dst: Path, text: str) -> None:
+    """Write under a temporary name, then rename, so a half-written file is never seen."""
     fd, tmp = tempfile.mkstemp(dir=dst.parent, suffix=".tmp")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(text)
