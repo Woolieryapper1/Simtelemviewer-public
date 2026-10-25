@@ -19,11 +19,14 @@ in the x-z plane, side_left is on the clockwise side of the direction of travel.
 
 from __future__ import annotations
 
+import json
 import struct
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+
+from .. import config
 
 _POINT = np.dtype([("pos", "<f4", 3), ("length", "<f4"), ("id", "<i4")])
 _EXTRA_FLOATS = 18
@@ -99,6 +102,47 @@ def find_layouts(tracks_dirs: list[Path], track: str) -> dict[str, Path]:
             for f in sorted(base.glob("*/ai/fast_lane.ai")):
                 found.setdefault(f"{track}/{f.parent.parent.name}", f)
     return found
+
+
+# --- One name per track ---------------------------------------------------
+# Not every logger names a track the same way in the files it writes: one CSP
+# writes the track folder ("sportsland_sugo_mts"), another the folder with the
+# layout stuck on the end ("sportsland_sugo_mtssugo", the "sugo" layout). Two
+# names would make one track look like two, and their runs couldn't be compared.
+
+ALIASES_FILE = config.DATA_DIR / "track_aliases.json"
+
+
+def track_aliases(path: Path | None = None) -> dict[str, str]:
+    """Hand-made renames from the data folder, {"name in the file": "track folder"},
+    for a track that isn't installed on this PC. None there (or unreadable): {}."""
+    try:
+        data = json.loads((path or ALIASES_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+
+def canonical_track(track: str, tracks_dirs: list[Path], aliases: dict[str, str]) -> str:
+    """The name runs of a track are filed under: its folder name.
+
+    In order: a hand-made alias, an installed track folder of that name, an
+    installed track folder followed straight by one of its layouts (a sub-folder
+    with its own data/, so not ui/ or extension/). Anything else stays as the file
+    has it - a layout name alone isn't enough to go on, as "micevec_vfsaa" with
+    its "vfsaa" layout shows."""
+    if track in aliases:
+        return aliases[track]
+    if not track or any((root / track).is_dir() for root in tracks_dirs):
+        return track
+    for root in tracks_dirs:
+        if not root.is_dir():
+            continue
+        for folder in root.iterdir():
+            layout = track[len(folder.name):]
+            if track.startswith(folder.name) and layout and (folder / layout / "data").is_dir():
+                return folder.name
+    return track
 
 
 # --- Matching the track to the telemetry's coordinates ---------------------

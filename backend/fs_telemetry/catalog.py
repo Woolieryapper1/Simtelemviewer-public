@@ -25,7 +25,8 @@ from dataclasses import dataclass, fields, replace
 from datetime import datetime
 from pathlib import Path
 
-from .config import CSP_DIR, CSV_DIR, IRACING_DIR, TELEMETRY_DIR
+from .config import CSP_DIR, CSV_DIR, IRACING_DIR, TELEMETRY_DIR, TRACKS_DIRS
+from .ingest.ac_track import canonical_track, track_aliases
 from .ingest.csv_import import read_csv
 from .ingest.ibt import read_ibt
 from .ingest.motec_ld import LdSession, read_ld
@@ -77,11 +78,12 @@ def session_key(s: LdSession) -> str:
     The file name changes if the run is exported again, renamed or moved, but who
     drove, in what, where, and when they left the pits doesn't - so hash those.
     (Checked on 275 real runs: no two share a key.) A file with no start time
-    falls back to its file name."""
+    falls back to its file name. The track is the name the file has, from before
+    track names were tidied up (ac_track.canonical_track), so keys never change."""
     started = started_at(s)
     if started is None:
         return f"file-{s.path.stem}"
-    text = "|".join([s.source, s.driver, s.car, s.track, started.isoformat()])
+    text = "|".join([s.source, s.driver, s.car, s.logged_track or s.track, started.isoformat()])
     return hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
 
 
@@ -218,13 +220,16 @@ class Catalog:
 def _from_saved(data: dict | None) -> SessionSummary | None:
     """A summary saved next to a run in the team library (by any version of the
     app: fields it doesn't know are ignored; if one it needs is missing, None, and
-    the run is read instead)."""
+    the run is read instead). Its track name is tidied up as if the run were read
+    here, as an older app may have saved it as the file had it."""
     if not data:
         return None
     known = {f.name for f in fields(SessionSummary)}
     try:
         data = {k: v for k, v in data.items() if k in known}
         data["started"] = datetime.fromisoformat(data["started"]) if data.get("started") else None
+        if data.get("source") == "ac" and isinstance(data.get("track"), str):
+            data["track"] = canonical_track(data["track"], TRACKS_DIRS, track_aliases())
         return SessionSummary(**data)
     except (TypeError, ValueError):
         return None

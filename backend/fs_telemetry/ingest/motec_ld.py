@@ -114,6 +114,9 @@ class LdSession:
     details: dict[str, str] = field(default_factory=dict)  # from the .ldx, e.g. "Vehicle Wheelbase": "1.545"
     source: str = "ac"  # which sim it came from: "ac" (this reader) or "iracing" (ingest/ibt.py)
     sector_lines_m: list[float] = field(default_factory=list)  # official sector lines, if the file says (iRacing does)
+    # The track's name as the file has it, when `track` is the folder name worked out from
+    # it (ac_track.canonical_track). session_key hashes this one, so notes stay where they were.
+    logged_track: str = ""
 
     @property
     def duration(self) -> float:
@@ -147,8 +150,13 @@ def read_ldx_details(path: Path) -> dict[str, str]:
     return {e.get("Id"): e.get("Value") for e in root.iter() if e.tag in ("String", "Numeric") and e.get("Id")}
 
 
-def read_ld(path: str | Path) -> LdSession:
+def read_ld(path: str | Path, tracks_dirs: list[Path] | None = None) -> LdSession:
+    from ..config import TRACKS_DIRS
+    from .ac_track import canonical_track, track_aliases
+    from .csp import adapt_csp_log, is_csp_log  # here, not at the top: csp.py builds on this module
+
     path = Path(path)
+    tracks_dirs = TRACKS_DIRS if tracks_dirs is None else tracks_dirs
     buf = path.read_bytes()
 
     _marker, meta_ptr, _data_ptr = _HEAD_PTRS.unpack_from(buf, 0)
@@ -172,10 +180,8 @@ def read_ld(path: str | Path) -> LdSession:
         ptr = next_ptr
 
     session = LdSession(
-        path=path, driver=driver, car=car, track=track, date=date, time=time,
-        channels=channels, beacons=read_ldx_beacons(path.with_suffix(".ldx")),
-        details=read_ldx_details(path.with_suffix(".ldx")),
+        path=path, driver=driver, car=car, track=canonical_track(track, tracks_dirs, track_aliases()),
+        date=date, time=time, channels=channels, beacons=read_ldx_beacons(path.with_suffix(".ldx")),
+        details=read_ldx_details(path.with_suffix(".ldx")), logged_track=track,
     )
-    from .csp import adapt_csp_log, is_csp_log  # here, not at the top: csp.py builds on this module
-
-    return adapt_csp_log(session) if is_csp_log(session) else session
+    return adapt_csp_log(session, tracks_dirs) if is_csp_log(session) else session
