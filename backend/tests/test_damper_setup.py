@@ -107,6 +107,37 @@ def test_setup_number_conversions():
     assert from_setup("X", 99999, ini) == ("20 clicks", 20.0)  # clamped to MAX
 
 
+def test_a_typed_spring_rate_beats_the_setup(car_dir):
+    front, rear = car_setup(car_dir, {"SPRING_RATE_HF": 80}, DamperSetupSettings(spring_front=120))
+    assert (front.spring_n_mm, front.spring_from) == (120, "typed")
+    assert (rear.spring_n_mm, rear.spring_from) == (60, "car files")
+    front, _ = car_setup(car_dir, {"SPRING_RATE_HF": 80}, DamperSetupSettings())
+    assert front.spring_from == "setup"
+    _, crit = quarter(120000, 250000, 210)
+    typed, _ = car_setup(car_dir, {}, DamperSetupSettings(spring_front=120))
+    assert typed.critical_ride_ns_m == pytest.approx(crit, abs=1)
+
+
+def heave_car(car_dir):
+    """Tatuus-style: no spring or dampers at the front corners, a heave spring instead."""
+    sus = (car_dir / "suspensions.ini").read_text()
+    front = sus[sus.index("[FRONT]"):sus.index("[REAR]")]
+    heave_front = ("[FRONT]\nSPRING_RATE=0\nHUB_MASS=40\nDAMP_BUMP=0\nDAMP_REBOUND=0\nDAMP_FAST_BUMP=0\nDAMP_FAST_REBOUND=0\n"
+                   "[HEAVE_FRONT]\nSPRING_RATE=80000\nDAMP_BUMP=8276\n")
+    (car_dir / "suspensions.ini").write_text(sus.replace(front, heave_front))
+    return car_dir
+
+
+def test_heave_car_needs_a_spring_rate(car_dir):
+    heave_car(car_dir)
+    with pytest.raises(CompareError, match=r"type the front wheel rate.*\[HEAVE_FRONT\] SPRING_RATE 80 N/mm"):
+        car_setup(car_dir, {}, DamperSetupSettings())
+    front, _ = car_setup(car_dir, {}, DamperSetupSettings(spring_front=80))
+    assert front.spring_n_mm == 80 and front.dampers == []  # 0 N·s/m at the corners: no damper rows, not ζ 0
+    front, _ = car_setup(car_dir, {"SPRING_RATE_HF": 80, "DAMP_BUMP_HF": 40}, DamperSetupSettings())
+    assert front.spring_from == "setup" and [r.name for r in front.dampers] == ["Bump"]
+
+
 def test_tyre_compound_comes_from_the_setup(car_dir):
     soft, _ = car_setup(car_dir, {"TYRES": 1}, DamperSetupSettings())
     assert soft.tyre_n_mm == 200

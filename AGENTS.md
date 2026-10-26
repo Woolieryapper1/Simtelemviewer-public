@@ -66,6 +66,9 @@ Shared UI pieces and design tokens live in `web/src/ui/` and `theme.css`.
 - Laps are compared by **distance**, not time. All maths assumes evenly spaced samples.
 - Estimated channels are labelled "(est.)" and carry a hover note on how far to trust them. Their accuracy is
   scored by the backtests against `backend/fs_telemetry/backtest/baseline.json`; a change that makes one worse fails.
+- Some AC cars (the Tatuus) have a heave spring and damper (`[HEAVE_FRONT]`) with 0 for the corner `SPRING_RATE` and
+  `DAMP_*`, and setups with `_HF`/`_HR` fields. The damper optimiser doesn't model heave elements yet: it takes the
+  spring from the setup or a wheel rate typed in the box, and skips 0 N·s/m dampers.
 - iRacing has no slip angles, tyre loads or track edges; balance there comes from steering, and slip ratios are estimated.
 - Car facts (steering ratio, wheelbase) come from `cars.py` first, then the car's AC files, then are learned from the
   run and labelled as learned.
