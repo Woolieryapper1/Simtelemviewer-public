@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "./api.js";
-import { applyLapColours, loadColours, saveColours } from "./colours.js";
+import { applyLapColours, carSlot, freeSlot, loadColours, saveColours } from "./colours.js";
 import ComparedLaps from "./ComparedLaps.jsx";
 import { loadSettings } from "./Definitions.jsx";
 import { lapKey } from "./LapsBox.jsx";
@@ -10,6 +10,7 @@ import SetupsPage from "./SetupsPage.jsx";
 import StintPage from "./StintPage.jsx";
 import TelemetryPage, { DEFAULT_LAYOUT } from "./TelemetryPage.jsx";
 import TrackPage from "./TrackPage.jsx";
+import { useTheme } from "./theme.js";
 import { IconButton, Tabs, ThemeMenu, ToastProvider } from "./ui/index.js";
 
 const PAGES = ["Telemetry", "Stint", "Metrics", "Track", "Setups"];
@@ -37,9 +38,12 @@ export default function App() {
   const [layoutName, setLayoutName] = useState(DEFAULT_LAYOUT); // "" = edited, not saved
   // Trace colours picked in the telemetry readout, remembered in this browser (see colours.js)
   const [colours, setColours] = useState(loadColours);
-  useEffect(() => applyLapColours(colours.laps), [colours]);
   // A short text that changes whenever a colour does, so charts know to redraw
   const colourKey = JSON.stringify(colours);
+  // Car colours are shades of the theme's palette, so they're worked out again when the theme changes.
+  // A layout effect, so the colours are in place before the charts draw (they draw in plain effects).
+  const { resolved: theme } = useTheme();
+  useLayoutEffect(() => applyLapColours(colours, selected), [colourKey, selected, theme]);
 
   // Load the run list and the notes once when the app starts
   const loadNotes = () => api.notes().then(setNotes).catch((e) => setError(e.message));
@@ -79,13 +83,22 @@ export default function App() {
     return () => { stale = true; };
   }, [timedKeys, sectors]); // re-run when which laps (or their order) or the sector count changes
 
-  // kind "laps" (key = colour slot) or "channels" (key = channel name); hex null = back to default
-  function changeColour(kind, key, hex) {
-    const group = { ...colours[kind] };
-    if (hex) group[key] = hex; else delete group[key];
-    const next = { ...colours, [kind]: group };
+  function keepColours(next) {
     setColours(next);
     saveColours(next);
+  }
+  // kind "laps" (key = colour slot), "car" (key = car name: that car's palette colour)
+  // or "channels" (key = channel name, see colours.js); hex null = back to default
+  function changeColour(kind, key, hex) {
+    if (kind === "car") [kind, key] = ["laps", carSlot(colours, selected, key)];
+    const group = { ...colours[kind] };
+    if (hex) group[key] = hex; else delete group[key];
+    keepColours({ ...colours, [kind]: group });
+  }
+  // A new colour order: the compared laps take its colours from the start again
+  function changeColourOrder(order) {
+    keepColours({ ...colours, order });
+    setSelected((prev) => prev.map((lap, i) => ({ ...lap, slot: order[i] })));
   }
 
   function changeSettings(next) {
@@ -98,8 +111,7 @@ export default function App() {
     setSelected((prev) => {
       if (prev.some((x) => x.key === key)) return prev.filter((x) => x.key !== key);
       if (prev.length >= 6) return prev; // the drawer also stops a 7th tick
-      const used = new Set(prev.map((x) => x.slot));
-      const slot = [0, 1, 2, 3, 4, 5].find((i) => !used.has(i)); // first free colour
+      const slot = freeSlot(colours, prev); // first free colour, in the chosen order
       return [...prev, {
         key, slot, sessionId: session.id, lap: lap.number, kind: lap.kind, invalid: lap.invalid,
         lapTime: lap.lap_time_s, driver: session.driver, car: session.car, started: session.started,
@@ -132,7 +144,8 @@ export default function App() {
           {error && <div className="error">Couldn't load runs: {error}</div>}
           {page !== "Setups" && (
             <ComparedLaps laps={selected} comparison={comparison} error={compareError}
-              onReference={makeReference} onRemove={removeLap} />
+              onReference={makeReference} onRemove={removeLap}
+              colours={colours} onColourOrder={changeColourOrder} onByCar={(byCar) => keepColours({ ...colours, byCar })} />
           )}
           {page === "Telemetry" && (
             <TelemetryPage laps={selected} comparison={comparison} rows={{ panels, setPanels, layoutName, setLayoutName }}

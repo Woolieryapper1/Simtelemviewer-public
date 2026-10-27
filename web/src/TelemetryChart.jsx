@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { css, lapColor, LAP_DASHES, nearestIndex, PLOT_CONFIG, Plotly, rowTitle, timeDelta } from "./chartUtils.js";
+import { css, lapColor, nearestIndex, PLOT_CONFIG, Plotly, rowTitle, timeDelta } from "./chartUtils.js";
+import { mixColours, toHex } from "./colours.js";
+import { describe, rowSeries, scaledUnit, SCALES, SMOOTHING } from "./rowMaths.js";
 import { useTheme } from "./theme.js";
 
 // Size of each stacked row, the label strip above it, and the axis at the bottom (px)
@@ -9,23 +11,23 @@ const READOUT_PX = 236, TICKS_PX = 46;
 // Height of one block in the readout; a row grows taller than ROW_PX if its blocks need it
 const ENTRY_PX = 40;
 const STEP_CHANNELS = new Set(["Gear"]); // drawn as steps, not slopes
-// Channel colours for rows that overlay several channels (lap is then shown by line style).
-// Throttle and brake always get the usual motorsport green and red; everything
-// else takes the next colour from a palette that leaves green and red out.
-// The colours are theme variables (tokens.css: --throttle, --brake, --channel-1..8).
+// Channel colours for rows that overlay several channels: every channel on every
+// lap has its own colour, all solid lines (no dashes to decode).
+// On the reference lap, throttle and brake get the usual motorsport green and red;
+// everything else takes the next colour from a palette that leaves green and red
+// out (theme variables in tokens.css: --throttle, --brake, --channel-1..8).
+// The other laps start as the same colours faded towards the text colour (white
+// on the dark theme), the 2nd lap most, so "my throttle green, his white" is the default.
+// Any of them can be changed in the readout (see colours.js for how picks are kept).
 const FIXED_COLORS = { "Throttle Pos": "--throttle", "Brake Pos": "--brake" };
 const CHANNEL_COUNT = 8;
-function channelColors(channels, picked = {}) {
+const FADES = [0, 0.7, 0.4, 0.85, 0.25, 0.55]; // by compared-lap position
+function channelColors(channels, picked = {}, lap = 0) {
   let next = 0;
-  // A colour picked in the readout wins; otherwise the fixed or next palette colour
-  return channels.map((ch) => picked[ch] ?? css(FIXED_COLORS[ch] ?? `--channel-${(next++ % CHANNEL_COUNT) + 1}`));
-}
-
-// "#6366f1" for the colour picker, whatever form the colour came in
-function toHex(color) {
-  if (/^#[0-9a-f]{6}$/i.test(color)) return color;
-  const m = color.match(/\d+/g);
-  return m ? "#" + m.slice(0, 3).map((v) => Number(v).toString(16).padStart(2, "0")).join("") : "#888888";
+  return channels.map((ch) => {
+    const base = picked[ch] ?? css(FIXED_COLORS[ch] ?? `--channel-${(next++ % CHANNEL_COUNT) + 1}`);
+    return lap === 0 ? base : picked[`${ch}@${lap}`] ?? mixColours(base, css("--text"), FADES[lap % FADES.length]);
+  });
 }
 
 // Whole numbers (gear, 100 % throttle) without decimals; otherwise fewer decimals
@@ -37,26 +39,22 @@ function fmtValue(v) {
   return v.toFixed(a >= 1000 ? 0 : a >= 100 ? 1 : a >= 10 ? 2 : 3);
 }
 
-// "Scale each channel" (autoscale) per overlay row, remembered in this browser.
-// Keyed by the row's channels, so the setting follows that combination of channels.
-const SCALE_KEY = "rowAutoscale";
+// Each row's scale and smoothing ({ scale, smooth }, see rowMaths.js), remembered
+// in this browser. Keyed by the row's channels, so the setting follows that combination of channels.
+const OPTS_KEY = "rowOptions";
 const rowKey = (channels) => channels.join("|");
-function loadScaled() {
-  try { return JSON.parse(localStorage.getItem(SCALE_KEY) ?? "{}"); } catch { return {}; }
-}
-
-// Lowest and highest value of a channel over all the compared laps (so every lap
-// shares the same scale and they stay comparable)
-function channelRange(laps, ch) {
-  let lo = Infinity, hi = -Infinity;
-  for (const lap of laps) for (const v of lap.data[ch] ?? []) if (Number.isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; }
-  return lo <= hi ? [lo, hi] : null;
+function loadOpts() {
+  try {
+    const saved = localStorage.getItem(OPTS_KEY);
+    if (saved) return JSON.parse(saved);
+    // The old "scale each channel" toggle, from before there were other options
+    const old = JSON.parse(localStorage.getItem("rowAutoscale") ?? "{}");
+    return Object.fromEntries(Object.keys(old).filter((k) => old[k]).map((k) => [k, { scale: "fit" }]));
+  } catch { return {}; }
 }
 
 // How many blocks a row's readout has: one per lap, or one per channel per lap for overlays
 const entries = (row, laps) => (row.channels.length > 1 ? row.channels.length : 1) * laps.length;
-// The same dash patterns as LAP_DASHES, written the SVG way for the little key
-const SVG_DASHES = ["", "6 3", "2 3", "6 3 2 3", "10 4", "10 4 2 4"];
 
 // All rows are ONE Plotly chart, so they share the distance axis and one cursor
 // line. Row labels are HTML laid over the strips between rows: they're where you
@@ -74,20 +72,26 @@ const SVG_DASHES = ["", "6 3", "2 3", "6 3 2 3", "10 4", "10 4 2 4"];
 //   dragMode: "zoom" or "pan" - what dragging across the chart does
 //   onHover(distance | null): the mouse moved along the chart (for the map's cursor dot)
 //   colours / onColour(kind, key, hex): colours picked in the readout (see colours.js)
+// Each row can be smoothed, and an overlay row's channels put on one scale in
+// other ways (% of their total, ÷ their mean...): the two little menus in its header.
 export default function TelemetryChart({ laps, panels, known, drag, zoomTo, dragMode, onHover, onRemoveRow, onRemoveChannel, onDragRow, onDragChannel, onDrop, colours = { laps: {}, channels: {} }, colourKey, onColour }) {
   const plotRef = useRef(null);
   const { resolved: theme } = useTheme(); // the chart takes its colours from the theme, so redraw when it changes
   const [cursor, setCursor] = useState(null); // distance (m) the readout shows; stays put when the mouse leaves
   const [, setView] = useState(0); // bumped on zoom/resize so the cursor line moves with the axis
-  const [scaled, setScaled] = useState(loadScaled); // { "Steering Angle|Balance Slip Angle": true, ... }
-  const isScaled = (row) => row.channels.length > 1 && !!scaled[rowKey(row.channels)];
-  const toggleScaled = (row) => {
-    const next = { ...scaled, [rowKey(row.channels)]: !isScaled(row) };
-    if (!next[rowKey(row.channels)]) delete next[rowKey(row.channels)];
-    setScaled(next);
-    localStorage.setItem(SCALE_KEY, JSON.stringify(next));
+  const [opts, setOpts] = useState(loadOpts); // { "Tire Load FL|Tire Load FR": { scale: "share", smooth: 30 }, ... }
+  const optsOf = (row) => (row.delta ? {} : opts[rowKey(row.channels)] ?? {});
+  const changeOpts = (row, change) => {
+    const key = rowKey(row.channels);
+    const mine = { ...opts[key], ...change };
+    if (!mine.smooth) delete mine.smooth;
+    if (!mine.scale || mine.scale === "same") delete mine.scale;
+    const next = { ...opts, [key]: mine };
+    if (!Object.keys(mine).length) delete next[key];
+    setOpts(next);
+    try { localStorage.setItem(OPTS_KEY, JSON.stringify(next)); } catch { /* storage off: just not remembered */ }
   };
-  const scaledKey = JSON.stringify(scaled);
+  const optsKey = JSON.stringify(opts);
   // The latest onHover, for the listener that's attached once below
   const hoverRef = useRef(onHover);
   hoverRef.current = onHover;
@@ -95,7 +99,12 @@ export default function TelemetryChart({ laps, panels, known, drag, zoomTo, drag
   const units = Object.assign({}, ...laps.map((l) => l.units));
   const rows = [];
   if (laps.length > 1) rows.push({ title: "Delta to ref  s", delta: true, channels: [] });
-  panels.forEach((channels, panel) => rows.push({ title: rowTitle(channels, units), channels, panel }));
+  panels.forEach((channels, panel) => {
+    // The title shows the unit of what's drawn: "%" once tyre loads are a share of their total
+    const scale = channels.length > 1 ? opts[rowKey(channels)]?.scale : null;
+    const shown = Object.fromEntries(channels.map((ch) => [ch, scaledUnit(scale, units[ch])]));
+    rows.push({ title: rowTitle(channels, shown), channels, panel });
+  });
 
   // Each row is at least ROW_PX tall, taller if its readout blocks need the room
   const rowPx = rows.map((row) => Math.max(ROW_PX, entries(row, laps) * ENTRY_PX + 10));
@@ -103,6 +112,11 @@ export default function TelemetryChart({ laps, panels, known, drag, zoomTo, drag
   const height = HEAD_PX + plotPx + BOTTOM_PX;
   // where row i's label strip starts, from the top of the chart
   const rowTop = (i) => rowPx.slice(0, i).reduce((a, b) => a + b, 0) + i * HEAD_PX;
+
+  // Each row's channels for every lap, smoothed and scaled (null for the delta row).
+  // Worked out once per change, not on every mouse move.
+  const series = useMemo(() => rows.map((row) => (row.delta ? null : rowSeries(row.channels, laps, optsOf(row)))),
+    [laps, panels, optsKey]);
 
   useEffect(() => {
     const plot = plotRef.current;
@@ -128,36 +142,32 @@ export default function TelemetryChart({ laps, panels, known, drag, zoomTo, drag
       const axis = i === 0 ? "" : String(i + 1);
       // row i's plot starts rowTop(i) px below the top of the plotting area
       const top = 1 - rowTop(i) / plotPx;
-      const autoscale = isScaled(row);
+      const s = series[i];
       layout[`yaxis${axis}`] = {
         domain: [Math.max(0, top - rowPx[i] / plotPx), top], gridcolor: grid, linecolor: grid, nticks: 4, fixedrange: true, // zoom only along distance
-        zeroline: !!row.delta, zerolinecolor: css("--border-strong"),
-        // Scaled rows have no single scale, so no numbers on the axis (the readout has the real values)
-        ...(autoscale ? { range: [-0.06, 1.06], autorange: false, showticklabels: false } : { autorange: true }),
+        zeroline: !!row.delta || s?.scale === "diff", zerolinecolor: css("--border-strong"),
+        ticksuffix: s?.scale === "share" ? " %" : s?.scale === "mean" ? "×" : "",
+        // "Each 0-1" rows have no single scale, so no numbers on the axis (the readout has the real values)
+        ...(s?.scale === "fit" ? { range: [-0.06, 1.06], autorange: false, showticklabels: false } : { autorange: true }),
       };
-      const line = (color, dash, name) => ({ color, width: 1.3, dash, shape: STEP_CHANNELS.has(name) ? "hv" : "linear" });
-      const name = (lap) => `${lap.driver.slice(0, 12)} L${lap.lap}`;
+      const line = (color, name) => ({ color, width: 1.3, shape: STEP_CHANNELS.has(name) ? "hv" : "linear" });
       if (row.delta || row.channels.length === 1) {
         // One channel: colour = lap
-        laps.forEach((lap) => {
-          const y = row.delta ? timeDelta(lap.data, ref.data) : lap.data[row.channels[0]];
+        laps.forEach((lap, j) => {
+          const y = row.delta ? timeDelta(lap.data, ref.data) : s.plot[j][row.channels[0]];
           if (!y) return; // channel not logged in this run
           traces.push({
             type: "scatter", mode: "lines", x: lap.data.Distance, y, yaxis: `y${axis}`,
-            line: line(lapColor(lap.slot), "solid", row.channels[0]), hoverinfo: "none",
+            line: line(lapColor(lap.slot), row.channels[0]), hoverinfo: "none",
           });
         });
       } else {
-        // Several channels: colour = channel, line style = lap
-        // With "scale each channel" on, every channel is stretched to fill the row
-        // (0 = its lowest value over the compared laps, 1 = its highest)
-        const colors = channelColors(row.channels, colours.channels);
-        row.channels.forEach((ch, c) => {
-          const range = autoscale ? channelRange(laps, ch) : null;
-          const fit = (values) => (range ? values.map((v) => (v - range[0]) / (range[1] - range[0] || 1)) : values);
-          laps.forEach((lap, j) => lap.data[ch] && traces.push({
-            type: "scatter", mode: "lines", x: lap.data.Distance, y: fit(lap.data[ch]), yaxis: `y${axis}`,
-            line: line(colors[c], LAP_DASHES[j % LAP_DASHES.length], ch), hoverinfo: "none",
+        // Several channels: a colour for every channel on every lap
+        laps.forEach((lap, j) => {
+          const colors = channelColors(row.channels, colours.channels, j);
+          row.channels.forEach((ch, c) => s.plot[j][ch] && traces.push({
+            type: "scatter", mode: "lines", x: lap.data.Distance, y: s.plot[j][ch], yaxis: `y${axis}`,
+            line: line(colors[c], ch), hoverinfo: "none",
           }));
         });
       }
@@ -175,7 +185,7 @@ export default function TelemetryChart({ laps, panels, known, drag, zoomTo, drag
     }
     // Only redraw when the data, rows, drag mode or colours change - not on every
     // little change elsewhere in the app (that made everything slow)
-  }, [laps, panels, dragMode, colourKey, scaledKey, theme]);
+  }, [laps, series, dragMode, colourKey, theme]);
 
   // Delta to the reference lap, worked out once per set of laps (not on every mouse move)
   const deltas = useMemo(() => (laps.length > 1 ? laps.map((lap) => timeDelta(lap.data, laps[0].data)) : []), [laps]);
@@ -220,22 +230,22 @@ export default function TelemetryChart({ laps, panels, known, drag, zoomTo, drag
               title={row.delta ? "" : row.channels.length === 1 ? "Drag onto another row to overlay it" : row.channels.join(" · ")}>
               {row.title}
             </span>
-            {isScaled(row) && <span className="muted">each channel scaled to fit</span>}
+            {describe(optsOf(row), row.channels) && <span className="muted">{describe(optsOf(row), row.channels)}</span>}
             <span className="row-right">
-              {row.channels.length > 1 && laps.length > 1 && laps.map((lap, j) => (
-                <span key={lap.key} className="row-key">
-                  <svg width="18" height="4" aria-hidden="true">
-                    <line x1="0" y1="2" x2="18" y2="2" stroke="currentColor" strokeWidth="1.5"
-                      strokeDasharray={SVG_DASHES[j % SVG_DASHES.length]} />
-                  </svg>
-                  L{lap.lap} {lap.driver.slice(0, 10)}
-                </span>
-              ))}
               {row.channels.length > 1 && (
-                <button type="button" className={`row-scale${isScaled(row) ? " on" : ""}`} aria-pressed={isScaled(row)}
-                  title={isScaled(row) ? "Scaling each channel to fill the row - click to put them back on one scale"
-                    : "Scale each channel to fill the row (so small ones like balance show next to big ones like steering)"}
-                  onClick={() => toggleScaled(row)}>⇕</button>
+                <select className={`row-select${optsOf(row).scale ? " on" : ""}`} aria-label="Scale"
+                  value={optsOf(row).scale ?? "same"} onChange={(e) => changeOpts(row, { scale: e.target.value })}
+                  title={"How this row's channels are put on a scale. " + SCALES[optsOf(row).scale ?? "same"].hint}>
+                  {Object.entries(SCALES).map(([k, v]) => <option key={k} value={k} title={v.hint}>{v.label}</option>)}
+                </select>
+              )}
+              {!row.delta && (
+                <select className={`row-select${optsOf(row).smooth ? " on" : ""}`} aria-label="Smoothing"
+                  value={optsOf(row).smooth ?? 0} onChange={(e) => changeOpts(row, { smooth: Number(e.target.value) })}
+                  title={"Smooth this row with a moving average this many metres wide, to calm noisy channels like tyre loads over kerbs."
+                    + " The readout shows the smoothed values. The same distance covers more time at low speed, so slow corners get smoothed more"}>
+                  {SMOOTHING.map((m) => <option key={m} value={m}>{m ? `Smooth ${m} m` : "No smoothing"}</option>)}
+                </select>
               )}
               {!row.delta && (
                 <button type="button" className="row-remove" aria-label="Remove this row"
@@ -249,7 +259,7 @@ export default function TelemetryChart({ laps, panels, known, drag, zoomTo, drag
       {inView && <div className="cursor-line" style={{ left: cursorPx, top: HEAD_PX, height: plotPx }} />}
       {/* Readout panel: one box per row, lined up with it */}
       {rows.map((row, i) => (
-        <Readout key={`ro${i}`} row={row} laps={laps} top={rowTop(i) + HEAD_PX} height={rowPx[i]} units={units} scaled={isScaled(row)}
+        <Readout key={`ro${i}`} row={row} laps={laps} top={rowTop(i) + HEAD_PX} height={rowPx[i]} units={units} series={series[i]}
           colours={colours} onColour={onColour} valueAt={valueAt} deltas={deltas}
           missing={missing} onDragChannel={onDragChannel} onRemoveChannel={onRemoveChannel} />
       ))}
@@ -270,31 +280,35 @@ export default function TelemetryChart({ laps, panels, known, drag, zoomTo, drag
 // One row's box in the readout panel: a stacked block per trace with its name,
 // its value at the cursor (big) and its colour in a box on the right.
 //   single channel (or the delta row): a block per lap, coloured by lap -
-//     changing the colour recolours that lap everywhere
+//     changing the colour recolours that lap everywhere (or that car, when
+//     colouring by car)
 //   overlay row: a block per channel (per lap, if several laps), grouped by lap
-//     in compared-lap order, coloured by channel; the little line next to the
-//     name shows the lap's line style
+//     in compared-lap order, each with its own colour
 // Drag a block onto another row to overlay that channel there; × (overlays
 // only) takes the channel out of this row.
-function Readout({ row, laps, top, height, units, scaled, colours, onColour, valueAt, deltas, missing, onDragChannel, onRemoveChannel }) {
-  const overlay = row.channels.length > 1;
-  const colors = overlay ? channelColors(row.channels, colours.channels) : [];
+function Readout({ row, laps, top, height, units, series, colours, onColour, valueAt, deltas, missing, onDragChannel, onRemoveChannel }) {
   const blocks = [];
-  if (!overlay) {
+  if (row.delta || row.channels.length === 1) {
     const ch = row.channels[0];
     laps.forEach((lap, j) => blocks.push({
       key: lap.key, channel: ch, name: `L${lap.lap} ${lap.driver.slice(0, 14)}`,
-      value: row.delta ? valueAt(lap, deltas[j]) : valueAt(lap, lap.data[ch]),
+      value: row.delta ? valueAt(lap, deltas[j]) : valueAt(lap, series.values[j][ch]),
       unit: row.delta ? "s" : units[ch] ?? "", signed: row.delta,
-      color: lapColor(lap.slot), pick: (hex) => onColour?.("laps", lap.slot, hex), pickTitle: "Change this lap's colour (everywhere)",
+      color: lapColor(lap.slot),
+      pick: (hex) => (colours.byCar ? onColour?.("car", lap.car, hex) : onColour?.("laps", lap.slot, hex)),
+      pickTitle: colours.byCar ? `Change ${lap.car}'s colour (everywhere)` : "Change this lap's colour (everywhere)",
     }));
   } else {
-    laps.forEach((lap, j) => row.channels.forEach((ch, c) => blocks.push({
-      key: `${ch}${lap.key}`, channel: ch, name: laps.length > 1 ? `${ch} · L${lap.lap}` : ch, dash: laps.length > 1 ? j : null,
-      value: valueAt(lap, lap.data[ch]), unit: units[ch] ?? "", missing: missing(ch), removable: true,
-      range: scaled ? channelRange(laps, ch) : null,
-      color: colors[c], pick: (hex) => onColour?.("channels", ch, hex), pickTitle: `Change ${ch}'s colour`,
-    })));
+    laps.forEach((lap, j) => {
+      const colors = channelColors(row.channels, colours.channels, j);
+      row.channels.forEach((ch, c) => blocks.push({
+        key: `${ch}${lap.key}`, channel: ch, name: laps.length > 1 ? `${ch} · L${lap.lap} ${lap.driver.slice(0, 8)}` : ch,
+        value: valueAt(lap, series.values[j][ch]), unit: series.unit(ch, units[ch]), missing: missing(ch), removable: true,
+        signed: series.scale === "diff", range: series.ranges[ch],
+        color: colors[c], pick: (hex) => onColour?.("channels", j ? `${ch}@${j}` : ch, hex),
+        pickTitle: laps.length > 1 ? `Change ${ch}'s colour on L${lap.lap} ${lap.driver}` : `Change ${ch}'s colour`,
+      }));
+    });
   }
   return (
     <div className="readout" style={{ top, height, width: READOUT_PX }}>
@@ -305,11 +319,6 @@ function Readout({ row, laps, top, height, units, scaled, colours, onColour, val
             + (row.delta ? "" : `Drag onto another row to overlay ${b.channel} there`)}>
           <div className="ro-text">
             <div className="ro-name">
-              {b.dash != null && (
-                <svg width="16" height="4" aria-hidden="true">
-                  <line x1="0" y1="2" x2="16" y2="2" stroke="currentColor" strokeWidth="1.5" strokeDasharray={SVG_DASHES[b.dash % SVG_DASHES.length]} />
-                </svg>
-              )}
               <span>{b.name}</span>
             </div>
             <div className="ro-value mono">

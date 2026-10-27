@@ -33,7 +33,7 @@ web/src  -- npm run build -->  backend/fs_telemetry/web  (committed, never edite
 
 | Page | Frontend (`web/src/`) | Backend (`backend/fs_telemetry/`) |
 |---|---|---|
-| Telemetry | `TelemetryPage.jsx`, `TelemetryChart.jsx` | `compare.py`, `layouts.py` |
+| Telemetry | `TelemetryPage.jsx`, `TelemetryChart.jsx`, `rowMaths.js` (row smoothing/scaling) | `compare.py`, `layouts.py` |
 | Stint | `StintPage.jsx`, `stintBoxes.jsx` | `stint.py` |
 | Metrics | `MetricsPage.jsx`, `DamperBox.jsx` | `metrics.py`, `dampers.py` |
 | Track | `TrackPage.jsx` | `compare.py`, `sectors.py`, `ingest/ac_track.py` |
@@ -85,6 +85,11 @@ Shared UI pieces and design tokens live in `web/src/ui/` and `theme.css`.
   and for teammates' saved summaries. `session_key` still hashes the name as logged (`logged_track`), so notes keys
   never change.
 - UI text explains itself in hover text rather than in the README; keep new features the same way.
+- Lap colours are the CSS variables `--lap-1..6`; charts read them when they draw. Picked colours and "colour by
+  car" shades are written over them by `colours.applyLapColours` in a *layout* effect in `App.jsx`, so they're
+  in place before the charts' plain effects draw (React runs child effects first).
+- Telemetry row smoothing and scaling (`rowMaths.js`) only change what's drawn and shown, never the run, and are
+  kept per browser like the trace colours, not in the team layouts.
 
 ## Keep this file current
 This file is the shared context for every agent and contributor, so update it as part of the change that makes it
