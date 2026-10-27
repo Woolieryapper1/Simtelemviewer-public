@@ -138,16 +138,27 @@ def _num(sec: dict[str, str], key: str) -> float | None:
 
 
 def setup_value(field: str, raw: float, setup_ini: dict[str, dict[str, str]]) -> float:
-    """A setup file's number -> the real number. With SHOW_CLICKS=1 the file holds clicks of STEP
-    (checked: 100 clicks of 100 = the car's DAMP_BUMP=10000); otherwise the value itself."""
+    """A setup file's number -> the real number, by the field's SHOW_CLICKS in setup.ini:
+        0  the value itself
+        1  clicks of STEP from 0 (checked: 100 clicks of 100 = the car's DAMP_BUMP=10000)
+        2  steps of STEP from MIN (checked: the Kunos GT-R GT3's ARB 4 and 2 = its default bars,
+           32000 + 4 × 9000 and 7650 + 2 × 2200)"""
     sec = setup_ini.get(field, {})
     step = _num(sec, "STEP") or 1.0
-    return raw * step if sec.get("SHOW_CLICKS", "0").strip() == "1" else raw
+    shown = sec.get("SHOW_CLICKS", "0").strip()
+    if shown == "1":
+        return raw * step
+    if shown == "2":
+        return (_num(sec, "MIN") or 0.0) + raw * step
+    return raw
 
 
-def to_n_m(v: float) -> float:
-    """Spring and bar rates: setups show N/mm, the car files hold N/m. No real wheel rate is under 1000 N/m."""
-    return v * 1000.0 if v < 1000 else v
+def setup_n_m(field: str, v: float, setup_ini: dict[str, dict[str, str]]) -> float:
+    """A spring or bar rate from a setup -> N/m. Setups give springs in N/mm and bars in N/m: a field
+    whose setup.ini range tops out under 1000 is in N/mm. With no setup.ini, a number under 1000 is
+    taken as N/mm (no real wheel rate is under 1000 N/m). The car files always hold N/m."""
+    hi = _num(setup_ini.get(field, {}), "MAX")
+    return v * 1000.0 if (hi < 1000 if hi is not None else v < 1000) else v
 
 
 def from_setup(field: str, real: float, setup_ini: dict[str, dict[str, str]]) -> tuple[str, float]:
@@ -157,8 +168,10 @@ def from_setup(field: str, real: float, setup_ini: dict[str, dict[str, str]]) ->
     step = _num(sec, "STEP") or 1.0
     lo, hi = _num(sec, "MIN"), _num(sec, "MAX")
     real = min(max(real, lo if lo is not None else real), hi if hi is not None else real)
-    if sec.get("SHOW_CLICKS", "0").strip() == "1":
-        clicks = round(real / step)
+    shown = sec.get("SHOW_CLICKS", "0").strip()
+    if shown in ("1", "2"):  # clicks from 0, or steps from MIN (see setup_value)
+        start = (lo or 0.0) if shown == "2" else 0.0
+        clicks = round((real - start) / step)
         return f"{clicks} clicks", float(clicks)
     v = round(real / step) * step
     return f"{v:.0f} N·s/m", v
@@ -185,7 +198,7 @@ def axle_setup(axle: str, sus: dict, total_kg: float, front_share: float, tyre_n
     if typed:
         spring, spring_from = typed * 1000.0, "typed"
     elif from_setup_v:
-        spring, spring_from = to_n_m(from_setup_v), "setup"
+        spring, spring_from = setup_n_m(f"SPRING_RATE_{side}", from_setup_v, setup_ini), "setup"
     else:
         spring, spring_from = _num(sus, "SPRING_RATE"), "car files"
     if not spring:
@@ -246,9 +259,9 @@ def car_setup(data: Path, values: dict, st: DamperSetupSettings) -> list[AxleSet
         if not tyre:
             raise CompareError(f"No {axle.lower()} tyre RATE in tyres.ini")
         arb_field = f"ARB_{axle.upper()}"
-        arb = setup_value(arb_field, float(values[arb_field]), setup_ini) if isinstance(values.get(arb_field), (int, float)) \
-            else _num(sus.get("ARB", {}), axle.upper()) or 0.0
-        out.append(axle_setup(axle, sec, total, share, tyre, to_n_m(arb) if arb else 0.0, values, setup_ini, st,
+        arb = setup_n_m(arb_field, setup_value(arb_field, float(values[arb_field]), setup_ini), setup_ini) \
+            if isinstance(values.get(arb_field), (int, float)) else _num(sus.get("ARB", {}), axle.upper()) or 0.0
+        out.append(axle_setup(axle, sec, total, share, tyre, arb, values, setup_ini, st,
                               sus.get(f"HEAVE_{axle.upper()}")))
     return out
 

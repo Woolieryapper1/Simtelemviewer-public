@@ -8,7 +8,7 @@ from test_dampers import FakeCatalog, fake_session
 
 from fs_telemetry.compare import CompareError, LapRef
 from fs_telemetry.damper_setup import (DamperSetupSettings, car_setup, compute_damper_setup, from_setup,
-                                       load_variation_pct, setup_value)
+                                       load_variation_pct, setup_n_m, setup_value)
 from fs_telemetry.ingest.motec_ld import Channel
 from fs_telemetry.setups import Setup
 
@@ -105,6 +105,30 @@ def test_setup_number_conversions():
     assert setup_value("X", 8, ini) == 2000 and setup_value("Y", 8, ini) == 8
     assert from_setup("X", 2100, ini) == ("8 clicks", 8.0)
     assert from_setup("X", 99999, ini) == ("20 clicks", 20.0)  # clamped to MAX
+    # SHOW_CLICKS=2: steps from MIN (the Kunos GT-R GT3's front bar, setup 4 = its default 68000)
+    ini = {"ARB_FRONT": {"SHOW_CLICKS": "2", "STEP": "9000", "MIN": "32000", "MAX": "86000"}}
+    assert setup_value("ARB_FRONT", 4, ini) == 68000
+    assert from_setup("ARB_FRONT", 68500, ini) == ("4 clicks", 4.0)
+
+
+def test_rate_units():
+    ini = {"SPRING_RATE_LF": {"MIN": "20", "MAX": "150"}, "ARB_REAR": {"MIN": "489", "MAX": "1647"}}
+    assert setup_n_m("SPRING_RATE_LF", 80, ini) == 80000  # range under 1000: N/mm
+    assert setup_n_m("ARB_REAR", 489, ini) == 489  # range in N/m, however small the bar
+    assert setup_n_m("ARB_FRONT", 25, {}) == 25000 and setup_n_m("ARB_FRONT", 25000, {}) == 25000  # no setup.ini: guess
+
+
+def test_bars_from_steps_and_soft_car_file_bars(car_dir):
+    # Tatuus-style: a rear bar of 489 N/m in the car files stays 489 N/m, not 489 N/mm
+    sus = car_dir / "suspensions.ini"
+    sus.write_text(sus.read_text().replace("REAR=0", "REAR=489"))
+    _, rear = car_setup(car_dir, {}, DamperSetupSettings())
+    assert rear.arb_n_mm == pytest.approx(0.49, abs=0.01)
+    # ...and a setup's bar in steps from MIN: 32072 + 8 × 2072 N/m
+    (car_dir / "setup.ini").write_text((car_dir / "setup.ini").read_text()
+                                       + "[ARB_FRONT]\nSHOW_CLICKS=2\nMIN=32072\nMAX=117024\nSTEP=2072\n")
+    front, _ = car_setup(car_dir, {"ARB_FRONT": 8}, DamperSetupSettings())
+    assert front.arb_n_mm == pytest.approx(48.65, abs=0.01)
 
 
 def test_a_typed_spring_rate_beats_the_setup(car_dir):

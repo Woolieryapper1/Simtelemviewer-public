@@ -69,6 +69,9 @@ Shared UI pieces and design tokens live in `web/src/ui/` and `theme.css`.
 - Some AC cars (the Tatuus) have a heave spring and damper (`[HEAVE_FRONT]`) with 0 for the corner `SPRING_RATE` and
   `DAMP_*`, and setups with `_HF`/`_HR` fields. The damper optimiser doesn't model heave elements yet: it takes the
   spring from the setup or a wheel rate typed in the box, and skips 0 N·s/m dampers.
+- AC setup files store each field as its `setup.ini` `SHOW_CLICKS` says: 0 = the value (springs in N/mm, bars in
+  N/m), 1 = clicks of STEP from 0, 2 = steps of STEP from MIN (`damper_setup.setup_value`). The car files always
+  hold N/m, even for a bar under 1000 N/m, so never guess units from a car-file number.
 - iRacing has no slip angles, tyre loads or track edges; balance there comes from steering, and slip ratios are estimated.
 - Car facts (steering ratio, wheelbase) come from `cars.py` first, then the car's AC files, then are learned from the
   run and labelled as learned.
