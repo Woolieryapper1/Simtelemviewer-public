@@ -9,7 +9,9 @@ N·s/m), so no motion ratios are needed. Per axle, from the car's data folder:
                     [ARB] FRONT / REAR
     tyres.ini       RATE (the tyre's vertical stiffness), for the setup's compound
     setup.ini       how the setup's numbers map to real ones (see setup_value)
-A setup from the library replaces the suspensions.ini defaults it has values for.
+A setup from the library replaces the suspensions.ini defaults it has values for, and a wheel
+rate typed in replaces the spring rate (for cars whose spring the files don't give per corner,
+like a heave-spring front, until heave elements are modelled).
 
 Physics, per corner (each corner's sprung mass on its own spring - the usual quarter car):
     sprung mass   m = TOTALMASS × axle weight share / 2 - HUB_MASS
@@ -66,6 +68,8 @@ class DamperSetupSettings(BaseModel):
     ls_rebound: float = Field(0.9, gt=0, le=2, description="Target low-speed rebound damping ratio")
     hs_bump: float = Field(0.3, gt=0, le=2, description="Target high-speed bump damping ratio")
     hs_rebound: float = Field(0.45, gt=0, le=2, description="Target high-speed rebound damping ratio")
+    spring_front: float | None = Field(None, gt=0, le=1000, description="Front wheel rate typed in, N/mm; beats the setup")
+    spring_rear: float | None = Field(None, gt=0, le=1000, description="Rear wheel rate typed in, N/mm; beats the setup")
 
 
 class DamperRow(BaseModel):
@@ -86,6 +90,7 @@ class AxleSetup(BaseModel):
     sprung_kg: float  # per corner
     unsprung_kg: float
     spring_n_mm: float
+    spring_from: str  # "typed", "setup" or "car files"
     arb_n_mm: float
     tyre_n_mm: float
     ride_hz: float
@@ -133,16 +138,27 @@ def _num(sec: dict[str, str], key: str) -> float | None:
 
 
 def setup_value(field: str, raw: float, setup_ini: dict[str, dict[str, str]]) -> float:
-    """A setup file's number -> the real number. With SHOW_CLICKS=1 the file holds clicks of STEP
-    (checked: 100 clicks of 100 = the car's DAMP_BUMP=10000); otherwise the value itself."""
+    """A setup file's number -> the real number, by the field's SHOW_CLICKS in setup.ini:
+        0  the value itself
+        1  clicks of STEP from 0 (checked: 100 clicks of 100 = the car's DAMP_BUMP=10000)
+        2  steps of STEP from MIN (checked: the Kunos GT-R GT3's ARB 4 and 2 = its default bars,
+           32000 + 4 × 9000 and 7650 + 2 × 2200)"""
     sec = setup_ini.get(field, {})
     step = _num(sec, "STEP") or 1.0
-    return raw * step if sec.get("SHOW_CLICKS", "0").strip() == "1" else raw
+    shown = sec.get("SHOW_CLICKS", "0").strip()
+    if shown == "1":
+        return raw * step
+    if shown == "2":
+        return (_num(sec, "MIN") or 0.0) + raw * step
+    return raw
 
 
-def to_n_m(v: float) -> float:
-    """Spring and bar rates: setups show N/mm, the car files hold N/m. No real wheel rate is under 1000 N/m."""
-    return v * 1000.0 if v < 1000 else v
+def setup_n_m(field: str, v: float, setup_ini: dict[str, dict[str, str]]) -> float:
+    """A spring or bar rate from a setup -> N/m. Setups give springs in N/mm and bars in N/m: a field
+    whose setup.ini range tops out under 1000 is in N/mm. With no setup.ini, a number under 1000 is
+    taken as N/mm (no real wheel rate is under 1000 N/m). The car files always hold N/m."""
+    hi = _num(setup_ini.get(field, {}), "MAX")
+    return v * 1000.0 if (hi < 1000 if hi is not None else v < 1000) else v
 
 
 def from_setup(field: str, real: float, setup_ini: dict[str, dict[str, str]]) -> tuple[str, float]:
@@ -152,8 +168,10 @@ def from_setup(field: str, real: float, setup_ini: dict[str, dict[str, str]]) ->
     step = _num(sec, "STEP") or 1.0
     lo, hi = _num(sec, "MIN"), _num(sec, "MAX")
     real = min(max(real, lo if lo is not None else real), hi if hi is not None else real)
-    if sec.get("SHOW_CLICKS", "0").strip() == "1":
-        clicks = round(real / step)
+    shown = sec.get("SHOW_CLICKS", "0").strip()
+    if shown in ("1", "2"):  # clicks from 0, or steps from MIN (see setup_value)
+        start = (lo or 0.0) if shown == "2" else 0.0
+        clicks = round((real - start) / step)
         return f"{clicks} clicks", float(clicks)
     v = round(real / step) * step
     return f"{v:.0f} N·s/m", v
@@ -164,8 +182,9 @@ def series(a: float, b: float) -> float:
 
 
 def axle_setup(axle: str, sus: dict, total_kg: float, front_share: float, tyre_n_m: float, arb_n_m: float,
-               values: dict, setup_ini: dict, st: DamperSetupSettings) -> AxleSetup:
-    """The physics for one axle. sus: its suspensions.ini section; values: the setup's fields (may be empty)."""
+               values: dict, setup_ini: dict, st: DamperSetupSettings, heave: dict | None = None) -> AxleSetup:
+    """The physics for one axle. sus: its suspensions.ini section; values: the setup's fields (may be empty);
+    heave: its [HEAVE_FRONT]/[HEAVE_REAR] section if the car has one (only named in the error, not modelled)."""
     side = next((s for s in SETUP_SIDES[axle] if any(f"{k}_{s}" in values for _, _, k, _ in DAMPERS)
                  or f"SPRING_RATE_{s}" in values), SETUP_SIDES[axle][0])
     from_values = lambda field: setup_value(field, float(values[field]), setup_ini) if isinstance(values.get(field), (int, float)) else None
@@ -174,10 +193,21 @@ def axle_setup(axle: str, sus: dict, total_kg: float, front_share: float, tyre_n
     sprung = total_kg * (front_share if axle == "Front" else 1 - front_share) / 2 - unsprung
     if sprung <= 0:
         raise CompareError(f"The {axle.lower()} sprung mass works out at {sprung:.0f} kg: check TOTALMASS, CG_LOCATION and HUB_MASS")
-    spring = from_values(f"SPRING_RATE_{side}")
-    spring = to_n_m(spring) if spring is not None else _num(sus, "SPRING_RATE")
+    # A typed wheel rate beats the setup, which beats the car's defaults
+    typed, from_setup_v = st.spring_front if axle == "Front" else st.spring_rear, from_values(f"SPRING_RATE_{side}")
+    if typed:
+        spring, spring_from = typed * 1000.0, "typed"
+    elif from_setup_v:
+        spring, spring_from = setup_n_m(f"SPRING_RATE_{side}", from_setup_v, setup_ini), "setup"
+    else:
+        spring, spring_from = _num(sus, "SPRING_RATE"), "car files"
     if not spring:
-        raise CompareError(f"No {axle.lower()} SPRING_RATE in suspensions.ini")
+        msg = (f"No {axle.lower()} spring rate: the {axle.upper()} SPRING_RATE in suspensions.ini is 0 or missing. "
+               f"Pick a setup for this car or type the {axle.lower()} wheel rate.")
+        if heave_rate := _num(heave or {}, "SPRING_RATE"):
+            msg += (f" This car has a {axle.lower()} heave spring ([HEAVE_{axle.upper()}] SPRING_RATE "
+                    f"{heave_rate / 1000:.0f} N/mm), which the optimiser doesn't model yet.")
+        raise CompareError(msg)
     ride_k, roll_k = series(spring, tyre_n_m), series(spring + 2 * arb_n_m, tyre_n_m)
     crit_ride, crit_roll = 2 * math.sqrt(ride_k * sprung), 2 * math.sqrt(roll_k * sprung)
 
@@ -187,7 +217,7 @@ def axle_setup(axle: str, sus: dict, total_kg: float, front_share: float, tyre_n
         now = from_values(field)
         if now is None:
             now = _num(sus, sus_key)
-        if now is None:
+        if not now:  # missing, or 0: no damper at this corner (e.g. a heave car's front corners)
             continue
         target = getattr(st, target_key)
         settable = field in setup_ini or field in values
@@ -201,7 +231,7 @@ def axle_setup(axle: str, sus: dict, total_kg: float, front_share: float, tyre_n
     fast = lambda k: (_num(sus, k) or None)
     return AxleSetup(
         axle=axle, sprung_kg=round(sprung, 1), unsprung_kg=unsprung, spring_n_mm=round(spring / 1000, 2),
-        arb_n_mm=round(arb_n_m / 1000, 2), tyre_n_mm=round(tyre_n_m / 1000, 1),
+        spring_from=spring_from, arb_n_mm=round(arb_n_m / 1000, 2), tyre_n_mm=round(tyre_n_m / 1000, 1),
         ride_hz=round(math.sqrt(ride_k / sprung) / (2 * math.pi), 2),
         roll_hz=round(math.sqrt(roll_k / sprung) / (2 * math.pi), 2),
         hop_hz=round(math.sqrt((spring + tyre_n_m) / unsprung) / (2 * math.pi), 1) if unsprung else 0.0,
@@ -229,9 +259,10 @@ def car_setup(data: Path, values: dict, st: DamperSetupSettings) -> list[AxleSet
         if not tyre:
             raise CompareError(f"No {axle.lower()} tyre RATE in tyres.ini")
         arb_field = f"ARB_{axle.upper()}"
-        arb = setup_value(arb_field, float(values[arb_field]), setup_ini) if isinstance(values.get(arb_field), (int, float)) \
-            else _num(sus.get("ARB", {}), axle.upper()) or 0.0
-        out.append(axle_setup(axle, sec, total, share, tyre, to_n_m(arb) if arb else 0.0, values, setup_ini, st))
+        arb = setup_n_m(arb_field, setup_value(arb_field, float(values[arb_field]), setup_ini), setup_ini) \
+            if isinstance(values.get(arb_field), (int, float)) else _num(sus.get("ARB", {}), axle.upper()) or 0.0
+        out.append(axle_setup(axle, sec, total, share, tyre, arb, values, setup_ini, st,
+                              sus.get(f"HEAVE_{axle.upper()}")))
     return out
 
 
