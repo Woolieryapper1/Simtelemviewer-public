@@ -1,5 +1,7 @@
+import { useState } from "react";
+import { DEFAULT_ORDER } from "./colours.js";
 import { fmtDay, fmtLap, fmtSplit, fmtTime } from "./format.js";
-import { Badge, IconButton } from "./ui/index.js";
+import { Badge, Button, IconButton, Segmented } from "./ui/index.js";
 
 // F1-style colour for one sector time:
 //   purple = quickest of all the compared laps
@@ -15,7 +17,7 @@ function sectorClass(v, k, lap, laps, comparison) {
 
 // The timing rows for the compared laps, shown at the top of every page.
 // The first lap is the reference; clicking another row makes it the reference.
-export default function ComparedLaps({ laps, comparison, error, onReference, onRemove }) {
+export default function ComparedLaps({ laps, comparison, error, onReference, onRemove, colours, onColourOrder, onByCar }) {
   if (!laps.length) return <div className="card compared empty-card">Tick laps in the drawer to compare them</div>;
 
   const ref = laps[0];
@@ -73,6 +75,56 @@ export default function ComparedLaps({ laps, comparison, error, onReference, onR
         </div>
       )}
       {error && <div className="error">{error}</div>}
+      <ColourBar colours={colours} manyCars={manyCars} onOrder={onColourOrder} onByCar={onByCar} />
+    </div>
+  );
+}
+
+// How the compared laps are coloured: one colour per lap, or one per car (its
+// laps in lighter and darker shades), and the order the colours are handed out
+// in. Drag a colour along the strip (or focus it and use the arrow keys) to move it.
+const ordinal = (i) => `${i + 1}${["st", "nd", "rd"][i] ?? "th"}`;
+function ColourBar({ colours, manyCars, onOrder, onByCar }) {
+  const [dragged, setDragged] = useState(null); // position in the order being dragged
+  const move = (from, to) => {
+    if (to < 0 || to >= colours.order.length || from === to) return;
+    const order = [...colours.order];
+    order.splice(to, 0, ...order.splice(from, 1));
+    onOrder(order);
+  };
+  const isDefault = colours.order.every((s, i) => s === DEFAULT_ORDER[i]);
+  return (
+    <div className="compared-foot">
+      <span className="muted">Colour by</span>
+      <Segmented size="sm" label="Colour by" value={colours.byCar ? "car" : "lap"} onChange={(v) => onByCar(v === "car")}
+        options={[
+          { value: "lap", label: "Lap", title: "Every compared lap gets its own colour" },
+          { value: "car", label: "Car", title: "Every car gets one colour; its laps are lighter and darker shades of it"
+            + (manyCars ? "" : ". All the compared laps are the same car, so they're all shades of one colour") },
+        ]} />
+      <span className="muted" title="Which colours are used first. Drag a colour to move it, or click it and use the arrow keys">Order</span>
+      <span className="colour-order" role="list" aria-label="Colour order">
+        {colours.order.map((slot, i) => (
+          <button key={slot} type="button" role="listitem" className={`colour-chip${dragged === i ? " dragging" : ""}`}
+            style={{ background: `var(--palette-${slot + 1})` }} draggable
+            aria-label={`Colour used ${ordinal(i)}`}
+            title={`Used ${ordinal(i)}${colours.byCar ? `, for the ${ordinal(i)} car` : ""}. Drag to move it, or use the arrow keys`}
+            onDragStart={(e) => { e.dataTransfer.setData("text/x-colour", String(i)); setDragged(i); }}
+            onDragEnd={() => setDragged(null)}
+            onDragOver={(e) => dragged != null && e.preventDefault()}
+            onDrop={(e) => { e.preventDefault(); if (dragged != null) move(dragged, i); setDragged(null); }}
+            onKeyDown={(e) => {
+              const to = { ArrowLeft: i - 1, ArrowRight: i + 1 }[e.key];
+              if (to == null) return;
+              e.preventDefault();
+              move(i, to);
+            }} />
+        ))}
+      </span>
+      {!isDefault && (
+        <Button size="sm" variant="ghost" icon="reset" onClick={() => onOrder(DEFAULT_ORDER)}
+          title="Put the colours back in their usual order">Reset order</Button>
+      )}
     </div>
   );
 }

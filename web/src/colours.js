@@ -31,15 +31,25 @@ export const LAP_SLOTS = 6;
 //   laps:     { slot: "#rrggbb" } - a compared lap's colour. Overriding the
 //             --lap-N variable recolours that lap EVERYWHERE: charts, maps, the
 //             compared-laps table. The pick is kept in both themes.
-//   channels: { "Throttle Pos": "#rrggbb" } - a channel's colour in overlay rows.
+//   channels: { "Throttle Pos": "#rrggbb" } - a channel's colour in overlay rows
+//             on the reference lap; "Throttle Pos@1" is its colour on the 2nd
+//             compared lap, "@2" the 3rd, and so on.
+//   order:    [slot, ...] - which lap colours are handed out first
+//   byCar:    true = colour by car: each car takes the next colour in `order`
+//             and its laps get lighter and darker shades of it
 
 const KEY = "traceColours";
-const EMPTY = { laps: {}, channels: {} };
+export const DEFAULT_ORDER = [0, 1, 2, 3, 4, 5];
+const EMPTY = { laps: {}, channels: {}, order: DEFAULT_ORDER, byCar: false };
+
+// A saved order is only used if it still holds every slot exactly once
+const validOrder = (order) =>
+  Array.isArray(order) && order.length === LAP_SLOTS && DEFAULT_ORDER.every((s) => order.includes(s)) ? order : DEFAULT_ORDER;
 
 export function loadColours() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? "{}");
-    return { laps: { ...saved.laps }, channels: { ...saved.channels } };
+    return { laps: { ...saved.laps }, channels: { ...saved.channels }, order: validOrder(saved.order), byCar: !!saved.byCar };
   } catch {
     return { ...EMPTY }; // corrupt entry or storage off: start fresh
   }
@@ -49,14 +59,60 @@ export function saveColours(colours) {
   try { localStorage.setItem(KEY, JSON.stringify(colours)); } catch { /* storage off: just not remembered */ }
 }
 
-// Put the lap colour overrides into the page's CSS variables (and take away any
-// that were reset, so the theme's default comes back)
+// ---- Mixing colours ----
+const rgb = (color) => {
+  const hex = color.match(/^#([0-9a-f]{6})$/i);
+  if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16));
+  const m = color.match(/\d+(\.\d+)?/g);
+  return m ? m.slice(0, 3).map(Number) : [136, 136, 136];
+};
+const hexOf = (values) => "#" + values.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+// "#rrggbb" for the colour pickers, whatever form the colour came in
+export const toHex = (color) => hexOf(rgb(color));
+// t of the way from colour a to colour b (0 = a, 1 = b)
+export const mixColours = (a, b, t) => {
+  const x = rgb(a), y = rgb(b);
+  return hexOf(x.map((v, i) => v + (y[i] - v) * t));
+};
+
+// ---- Colour by car ----
+// Cars in the order they first appear in the compared laps
+export const carsOf = (laps) => [...new Set(laps.map((l) => l.car))];
+// How a car's 1st, 2nd, 3rd... lap is shaded: + = towards white, - = towards black
+const SHADES = [0, 0.45, -0.35, 0.7, -0.55, 0.85];
+const shade = (base, n) => {
+  const t = SHADES[n % SHADES.length];
+  return t === 0 ? toHex(base) : mixColours(base, t > 0 ? "#ffffff" : "#000000", Math.abs(t));
+};
+// The palette slot whose colour a car takes
+export const carSlot = (colours, laps, car) => colours.order[Math.max(0, carsOf(laps).indexOf(car)) % LAP_SLOTS];
+// { slot: colour } for every compared lap: its car's colour, shaded by how many
+// of that car's laps came before it. A colour picked for a palette slot changes that car's colour.
+function carColours(colours, laps, themeColour) {
+  const seen = {};
+  return Object.fromEntries(laps.map((lap) => {
+    const n = seen[lap.car] = (seen[lap.car] ?? -1) + 1;
+    const slot = carSlot(colours, laps, lap.car);
+    return [lap.slot, shade(colours.laps[slot] ?? themeColour(slot), n)];
+  }));
+}
+
+// The first free colour slot for a new compared lap, following the chosen order
+export const freeSlot = (colours, laps) => colours.order.find((s) => !laps.some((l) => l.slot === s));
+
+// Put the lap colours into the page's CSS variables: the picked ones, or the
+// car colours. Overrides from last time are taken away first, so the theme's
+// default comes back (and car colours are worked out from the theme's palette).
 const applied = new Set();
-export function applyLapColours(laps) {
+export function applyLapColours(colours, laps) {
   const root = document.documentElement.style;
-  for (const slot of applied) if (!(slot in laps)) root.removeProperty(`--lap-${Number(slot) + 1}`);
+  for (const slot of applied) root.removeProperty(`--lap-${Number(slot) + 1}`);
   applied.clear();
-  for (const [slot, hex] of Object.entries(laps)) {
+  const themeColour = (slot) => getComputedStyle(document.documentElement).getPropertyValue(`--lap-${slot + 1}`).trim();
+  // --palette-N: the colours as they stand before car shading, for the colour-order picker
+  for (let slot = 0; slot < LAP_SLOTS; slot++) root.setProperty(`--palette-${slot + 1}`, colours.laps[slot] ?? themeColour(slot));
+  const set = colours.byCar ? carColours(colours, laps, themeColour) : colours.laps;
+  for (const [slot, hex] of Object.entries(set)) {
     root.setProperty(`--lap-${Number(slot) + 1}`, hex);
     applied.add(slot);
   }
