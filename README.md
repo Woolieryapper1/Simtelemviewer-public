@@ -126,9 +126,9 @@ runs with known answers. `backend/fs_telemetry/backtest/baseline.json` holds the
 one worse than its tolerance fails.
 
 ```powershell
-.venv\Scripts\fs-telemetry validate                    # report in backtest-report (add --html for a web page)
+.venv\Scripts\python -m fs_telemetry validate          # report in backtest-report (add --html for a web page)
 .venv\Scripts\python -m pytest -m backtest             # the same, as a test
-.venv\Scripts\fs-telemetry validate --update-baseline  # accept a deliberate improvement, then commit baseline.json
+.venv\Scripts\python -m fs_telemetry validate --update-baseline  # accept a deliberate improvement, then commit baseline.json
 ```
 
 `backend/tests/backtest/corpus.json` says which folders and runs to use (telemetry files never go into git).
