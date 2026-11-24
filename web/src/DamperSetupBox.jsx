@@ -6,11 +6,13 @@ import { Input, Segmented, Select } from "./ui/index.js";
 // Damper optimiser box on the Metrics page, under the damper histograms (AC): damping
 // ratios per axle from the car's files and a library setup, the settings that hit the
 // target ratios, and each tyre's load variation to judge a change back to back.
+// Wheel rates can be typed in when there's no setup or the car files don't give them.
 // Its options are remembered in this browser.
 
-const DEFAULTS = { scope: "run", setupId: "", ls_bump: 0.6, ls_rebound: 0.9, hs_bump: 0.3, hs_rebound: 0.45 };
+const DEFAULTS = { scope: "run", setupId: "", ls_bump: 0.6, ls_rebound: 0.9, hs_bump: 0.3, hs_rebound: 0.45, springs: {} };
 const STORAGE_KEY = "damperSetupOptions";
 const TARGETS = [["ls_bump", "LS bump"], ["ls_rebound", "LS rebound"], ["hs_bump", "HS bump"], ["hs_rebound", "HS rebound"]];
+const SPRINGS = [["spring_front", "F"], ["spring_rear", "R"]];
 
 function loadOptions() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") }; }
@@ -22,7 +24,7 @@ export default function DamperSetupBox({ laps }) {
   const [opts, setOpts] = useState(loadOptions);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [setups, setSetups] = useState([]);
+  const [setups, setSetups] = useState(null); // null until the library has loaded
 
   const change = (patch) => setOpts((prev) => {
     const next = { ...prev, ...patch };
@@ -31,11 +33,18 @@ export default function DamperSetupBox({ laps }) {
   });
   useEffect(() => { api.setups().then(setSetups).catch(() => setSetups([])); }, []);
 
-  const d0 = result?.d;
-  const forCar = setups.filter((s) => s.car === d0?.car);
+  // The car comes from the laps, so the setup list works even when the optimiser can't (no spring rate yet)
+  const car = laps[0]?.car;
+  const forCar = (setups ?? []).filter((s) => s.car === car);
   // A remembered setup from another car would be refused: only send one for this car
   const setupId = forCar.some((s) => s.id === opts.setupId) ? opts.setupId : "";
-  const request = { scope: opts.scope, ...Object.fromEntries(TARGETS.map(([k]) => [k, opts[k]])), ...(setupId ? { setup_id: setupId } : {}) };
+  // Typed wheel rates are remembered per car: one car's springs mean nothing on another
+  const springs = opts.springs?.[car] ?? {};
+  const changeSpring = (k, v) => change({ springs: { ...opts.springs, [car]: { ...springs, [k]: v } } });
+  const request = {
+    scope: opts.scope, ...Object.fromEntries(TARGETS.map(([k]) => [k, opts[k]])), ...(setupId ? { setup_id: setupId } : {}),
+    ...Object.fromEntries(SPRINGS.filter(([k]) => Number(springs[k]) > 0).map(([k]) => [k, Number(springs[k])])),
+  };
   const key = JSON.stringify([laps.map((l) => l.key), request]);
   useEffect(() => {
     if (!laps.length) return;
@@ -67,7 +76,13 @@ export default function DamperSetupBox({ laps }) {
             {forCar.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.track}</option>)}
           </Select>
         </label>
-        {d0 && !forCar.length && <span className="muted">Import this car's setups on the Setups page to pick one</span>}
+        {setups && car && !forCar.length && <span className="muted">Import this car's setups on the Setups page to pick one</span>}
+        <span className="field band-inputs" title="Wheel rates (N/mm at the wheel) to use instead of the setup's or the car files'. Leave empty to use those. For a heave-spring car, a value here is treated as each wheel's own rate.">
+          Spring N/mm {SPRINGS.map(([k, name]) => (
+            <span key={k}>{name} <Input size="sm" aria-label={`${name === "F" ? "Front" : "Rear"} wheel rate, N/mm`} type="number" min="1" max="1000" step="1"
+              placeholder="setup" value={springs[k] ?? ""} onChange={(e) => changeSpring(k, e.target.value)} /></span>
+          ))}
+        </span>
         <span className="field band-inputs" title="Target damping ratios (rules of thumb). LS = body control, HS = bumps and kerbs.">
           Targets ζ {TARGETS.map(([k, name]) => (
             <span key={k}>{name} <Input size="sm" aria-label={`Target ${name} damping ratio`} type="number" min="0.05" max="2" step="0.05"
@@ -94,10 +109,11 @@ function AxleTable({ a }) {
   return (
     <div className="table-scroll">
       <p className="hint table-foot">
-        <b>{a.axle}</b> · sprung {num(a.sprung_kg, 0)} kg + {num(a.unsprung_kg, 0)} kg per wheel · spring {num(a.spring_n_mm, 0)} N/mm ·
+        <b>{a.axle}</b> · sprung {num(a.sprung_kg, 0)} kg + {num(a.unsprung_kg, 0)} kg per wheel · <span title="Where the spring rate comes from: typed in above, the chosen setup, or the car files">spring {num(a.spring_n_mm, 0)} N/mm ({a.spring_from})</span> ·
         bar {num(a.arb_n_mm, 0)} N/mm · tyre {num(a.tyre_n_mm, 0)} N/mm · ride {num(a.ride_hz, 2)} Hz · roll {num(a.roll_hz, 2)} Hz ·
         wheel hop {num(a.hop_hz, 1)} Hz{a.fast_bump_m_s != null && ` · fast above ${num(a.fast_bump_m_s * 1000, 0)} mm/s bump, ${num((a.fast_rebound_m_s ?? 0) * 1000, 0)} mm/s rebound`}
       </p>
+      {!a.dampers.length ? <p className="hint table-foot">No {a.axle.toLowerCase()} corner dampers in the car files (a heave-damper car?): pick a setup to see them.</p> : (
       <table className="data">
         <thead>
           <tr>
@@ -125,6 +141,7 @@ function AxleTable({ a }) {
           ))}
         </tbody>
       </table>
+      )}
     </div>
   );
 }
