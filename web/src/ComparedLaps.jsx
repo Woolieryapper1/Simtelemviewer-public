@@ -103,9 +103,9 @@ function ColourBar({ colours, manyCars, onOrder, onByCar }) {
             + (manyCars ? "" : ". All the compared laps are the same car, so they're all shades of one colour") },
         ]} />
       <span className="muted" title="Which colours are used first. Drag a colour to move it, or click it and use the arrow keys">Order</span>
-      <span className="colour-order" role="list" aria-label="Colour order">
+      <span className="colour-order" role="group" aria-label="Colour order">
         {colours.order.map((slot, i) => (
-          <button key={slot} type="button" role="listitem" className={`colour-chip${dragged === i ? " dragging" : ""}`}
+          <button key={slot} type="button" className={`colour-chip${dragged === i ? " dragging" : ""}`}
             style={{ background: `var(--palette-${slot + 1})` }} draggable
             aria-label={`Colour used ${ordinal(i)}`}
             title={`Used ${ordinal(i)}${colours.byCar ? `, for the ${ordinal(i)} car` : ""}. Drag to move it, or use the arrow keys`}

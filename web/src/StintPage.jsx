@@ -16,7 +16,7 @@ const CORNERS = ["FL", "FR", "RL", "RR"];
 // table you can tick laps from, and the estimated aero map for the run.
 // The tiles and charts are customisable (add / remove / drag to reorder) and
 // remembered per car - see stintBoxes.jsx for everything that can be shown.
-export default function StintPage({ session, note, settings, onSettings, selected, onToggleLap }) {
+export default function StintPage({ session, note, settings, onSettings, selected, onToggleLap, colourKey }) {
   const [stint, setStint] = useState(null);
   const [aero, setAero] = useState(null);
   const [error, setError] = useState(null);
@@ -136,7 +136,7 @@ function Trend({ title, unit, laps, series, bars = false, empty = null }) {
     <div className="card chart-card">
       <div className="card-head"><h3>{title}</h3><span className="muted">{unit}</span></div>
       {empty ? <div className="box-empty">{empty}</div>
-        : <Plot deps={[laps, series.length]} draw={(el) => drawTrend(el, unit, laps, series, { bars })} />}
+        : <Plot deps={[laps, series.length, colourKey]} draw={(el) => drawTrend(el, unit, laps, series, { bars })} />}
     </div>
   );
 }

@@ -153,10 +153,10 @@ export default function App() {
           )}
           {page === "Stint" && (
             <StintPage session={open} note={open && notes[open.key]} settings={settings} onSettings={changeSettings}
-              selected={selected} onToggleLap={toggleLap} />
+              selected={selected} onToggleLap={toggleLap} colourKey={colourKey} />
           )}
           {page === "Metrics" && (
-            <MetricsPage laps={selected} settings={settings} onSettings={changeSettings} comparison={comparison} />
+            <MetricsPage laps={selected} settings={settings} onSettings={changeSettings} comparison={comparison} colourKey={colourKey} />
           )}
           {page === "Track" && <TrackPage laps={selected} comparison={comparison} sectors={sectors} onSectors={setSectors} colourKey={colourKey} />}
           {page === "Setups" && <SetupsPage />}

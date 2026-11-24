@@ -68,7 +68,8 @@ function range(series) {
 export function rowSeries(channels, laps, opts = {}) {
   const scale = channels.length > 1 && SCALES[opts.scale] ? opts.scale : "same";
   const values = laps.map((lap) => {
-    const d = lap.data, step = d.Distance?.length > 1 ? d.Distance[1] - d.Distance[0] : 2;
+    const d = lap.data, gap = d.Distance?.length > 1 ? d.Distance[1] - d.Distance[0] : 2;
+    const step = gap > 0 ? gap : 2; // a duplicate first point must not make the window infinite
     const samples = opts.smooth ? Math.max(1, Math.round(opts.smooth / step)) : 1;
     const raw = Object.fromEntries(channels.map((ch) => [ch, d[ch] ? smooth(d[ch], samples) : null]));
     if (scale === "share") {
