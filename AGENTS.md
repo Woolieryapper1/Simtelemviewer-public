@@ -18,7 +18,8 @@ frontend in `web/`. It runs on the user's PC and uploads nothing.
 ingest/motec_ld.py, ingest/csp.py, ingest/ibt.py, ingest/csv_import.py   (+ ingest/ac_track.py: track edges)
         |
     catalog.py      finds and caches sessions in the configured folders (config.py),
-                    plus teammates' runs in the team library (shared.py)
+                    plus teammates' runs in the team library (shared.py); run summaries are
+                    saved in FS_DATA_DIR/run_summaries.json so a restart doesn't re-read every run
         |
     maths.py        derived channels, computed when a session opens (fed by cars.py, aero.py)
         |
@@ -66,6 +67,12 @@ Shared UI pieces and design tokens live in `web/src/ui/` and `theme.css`.
 - Laps are compared by **distance**, not time. All maths assumes evenly spaced samples.
 - Estimated channels are labelled "(est.)" and carry a hover note on how far to trust them. Their accuracy is
   scored by the backtests against `backend/fs_telemetry/backtest/baseline.json`; a change that makes one worse fails.
+- Some AC cars (the Tatuus) have a heave spring and damper (`[HEAVE_FRONT]`) with 0 for the corner `SPRING_RATE` and
+  `DAMP_*`, and setups with `_HF`/`_HR` fields. The damper optimiser doesn't model heave elements yet: it takes the
+  spring from the setup or a wheel rate typed in the box, and skips 0 N·s/m dampers.
+- AC setup files store each field as its `setup.ini` `SHOW_CLICKS` says: 0 = the value (springs in N/mm, bars in
+  N/m), 1 = clicks of STEP from 0, 2 = steps of STEP from MIN (`damper_setup.setup_value`). The car files always
+  hold N/m, even for a bar under 1000 N/m, so never guess units from a car-file number.
 - iRacing has no slip angles, tyre loads or track edges; balance there comes from steering, and slip ratios are estimated.
 - Car facts (steering ratio, wheelbase) come from `cars.py` first, then the car's AC files, then are learned from the
   run and labelled as learned.
@@ -79,6 +86,10 @@ Shared UI pieces and design tokens live in `web/src/ui/` and `theme.css`.
   are `<name>~<file>`.
 - Synced folders are deep and AC/CSP file names long: open files through `shared.long_path` where a path can pass
   Windows' 260-character limit.
+- Saved run summaries (`catalog.CACHE_FILE`) are reused while the file's time and size match and
+  `catalog.summaries_version()` doesn't change. That hashes the code that reads runs and splits laps (`ingest/`,
+  `laps.py`, `catalog.py`), the installed track folders and the track aliases, so changing any of them re-reads every
+  run once on the next start. If a summary starts depending on anything else, add it there, or the list goes stale.
 - Loggers don't all name a track the same way: one CSP writes the track folder (`sportsland_sugo_mts`), another the
   folder with the layout stuck on the end (`sportsland_sugo_mtssugo`). `ac_track.canonical_track` turns AC names into
   the installed folder's name (or a hand-made alias from `track_aliases.json` in `FS_DATA_DIR`) when a run is read,
