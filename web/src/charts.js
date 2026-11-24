@@ -315,6 +315,51 @@ export function drawCamber(el, d, sels) {
   }), { ...PLOT_CONFIG, displayModeBar: false });
 }
 
+// Tyre pressure advisor: one panel per axle, hot pressure against tread temperature. The shaded band is the
+// temperature window where the tyre's curve is within 1% of its peak, the dashed line the ideal hot pressure.
+// Per tyre: faint dots = each lap of the run, a dotted line = where the tyre would sit if the tread ran 10 °C
+// cooler to 10 °C hotter (pressure rises with temperature along it), the big dot = as run near the limit.
+// d: the /api/pressure response; sels: [{ label, slot }] per selection.
+export function drawPressure(el, d, sels) {
+  const axles = ["Front", "Rear"], gap = 0.08;
+  const traces = [], axes = {}, shapes = [], annotations = [];
+  axles.forEach((axle, p) => {
+    const n = p ? "2" : "", xa = `x${n}`, ya = `y${n}`;
+    axes[`xaxis${n}`] = axis({ domain: [p * (0.5 + gap / 2), p * (0.5 + gap / 2) + 0.5 - gap / 2], anchor: ya, zeroline: false,
+      title: { text: "Tread temperature [°C]", standoff: 4 } });
+    axes[`yaxis${n}`] = axis({ anchor: xa, zeroline: false, ...(p ? {} : { title: { text: "Hot pressure [psi]" } }) });
+    const tyre = d.selections[0].tyres.find((t) => t.axle === axle);
+    shapes.push({ type: "rect", xref: xa, yref: `${ya} domain`, x0: tyre.window_c[0], x1: tyre.window_c[1], y0: 0, y1: 1,
+      fillcolor: css("--text-3"), opacity: 0.12, line: { width: 0 }, layer: "below" });
+    shapes.push({ type: "line", xref: `${xa} domain`, yref: ya, x0: 0, x1: 1, y0: tyre.ideal_psi, y1: tyre.ideal_psi,
+      line: { color: css("--text-2"), width: 1, dash: "dash" } });
+    d.selections.forEach((s, i) => {
+      const colour = lapColor(sels[i].slot);
+      s.corners.filter((c) => (c.corner[0] === "F") === (axle === "Front") && c.hot_psi != null).forEach((c) => {
+        const common = { xaxis: xa, yaxis: ya, legendgroup: sels[i].label, showlegend: false };
+        traces.push({ ...common, type: "scatter", mode: "markers", x: s.by_lap.map((l) => l.tread_c[c.corner]),
+          y: s.by_lap.map((l) => l.hot_psi[c.corner]), text: s.by_lap.map((l) => `lap ${l.lap}`),
+          marker: { color: colour, size: 5, opacity: 0.35 },
+          hovertemplate: `%{text} · %{x:.0f} °C · %{y:.2f} psi<extra>${c.corner} · ${sels[i].label}</extra>` });
+        traces.push({ ...common, type: "scatter", mode: "lines", x: c.scenarios.map((x) => c.tread_c + x.shift_c),
+          y: c.scenarios.map((x) => x.hot_psi), customdata: c.scenarios.map((x) => [x.shift_c, x.cold_change_psi]),
+          line: { color: colour, width: 1.5, dash: "dot" },
+          hovertemplate: `%{customdata[0]:+.0f} °C → %{y:.2f} psi · cold change %{customdata[1]:+.1f}<extra>${c.corner} · ${sels[i].label}</extra>` });
+        traces.push({ ...common, name: sels[i].label, showlegend: axle === "Front" && c.corner === "FL", type: "scatter",
+          mode: "markers+text", x: [c.tread_c], y: [c.hot_psi], text: [c.corner], textposition: "top center",
+          textfont: { size: 10, color: css("--text-2") }, marker: { color: colour, size: 10, line: { color: css("--card"), width: 1.5 } },
+          hovertemplate: `${c.tread_c.toFixed(1)} °C · ${c.hot_psi.toFixed(2)} psi (ideal ${c.ideal_psi})<extra>${c.corner} · ${sels[i].label}</extra>` });
+      });
+    });
+    annotations.push({ text: axle, xref: `${xa} domain`, yref: `${ya} domain`, x: 0.01, y: 1, xanchor: "left", yanchor: "top",
+      showarrow: false, font: { size: 11, color: css("--text-2") } });
+  });
+  Plotly.react(el, traces, base(320, {
+    margin: { l: 56, r: 12, t: 28, b: 44 }, hovermode: "closest", showlegend: true, shapes, annotations, ...axes,
+    legend: { orientation: "h", x: 1, xanchor: "right", y: 1.01, yanchor: "bottom", font: { color: css("--text-2") } },
+  }), { ...PLOT_CONFIG, displayModeBar: false });
+}
+
 // ---------- track maps ----------
 // opts: { surface, lines, lineColour: "lap" | "pedals", colouring: "dominance" | "speed" | "none", labels, big, height }
 //   surface    - track edges + tarmac from the AC track files (if the server has them)

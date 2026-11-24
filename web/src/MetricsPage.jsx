@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import Arrange from "./Arrange.jsx";
 import { drawBalance, drawGateMap, drawGG, drawMech } from "./charts.js";
 import CamberBox from "./CamberBox.jsx";
+import PressureBox from "./PressureBox.jsx";
 import DamperBox from "./DamperBox.jsx";
 import DamperSetupBox from "./DamperSetupBox.jsx";
 import Definitions from "./Definitions.jsx";
@@ -51,7 +52,7 @@ export default function MetricsPage({ laps: allLaps, settings, onSettings, compa
   const key = JSON.stringify([laps.map((l) => l.key), settings]);
   useEffect(() => {
     if (!laps.length) { setMetrics(null); return; }
-    if (section === "dampers" || section === "camber") return;
+    if (section === "dampers" || section === "camber" || section === "pressure") return;
     let stale = false;
     setError(null);
     api.metrics(laps, settings)
@@ -67,12 +68,13 @@ export default function MetricsPage({ laps: allLaps, settings, onSettings, compa
     <div className="analysis-nav">
       <Segmented label="Metrics view" value={section} onChange={setSection} options={[
         { value: "overview", label: "Overview" }, { value: "balance", label: "Balance" },
-        { value: "dampers", label: "Dampers" }, { value: "camber", label: "Camber" },
+        { value: "dampers", label: "Dampers" }, { value: "camber", label: "Camber" }, { value: "pressure", label: "Pressures" },
       ]} />
       <span className="muted">{section === "overview" ? "Corner gates, driving inputs and lap summaries"
         : section === "balance" ? "Dynamic balance and estimated mechanical balance"
         : section === "dampers" ? "Damper speeds by lap, run or corner gate, and damping ratios vs targets"
-        : "Best static camber per axle from the tyre's camber curve (AC)"}</span>
+        : section === "camber" ? "Best static camber per axle from the tyre's camber curve (AC)"
+        : "Cold pressure to set per tyre, from hot pressure and tread temperature near the limit (AC)"}</span>
     </div>
     <Definitions settings={settings} onChange={onSettings} summary={summary} />
   </>;
@@ -80,6 +82,7 @@ export default function MetricsPage({ laps: allLaps, settings, onSettings, compa
   if (!laps.length) return <>{defs}<div className="empty">Tick full timed laps in the drawer to compare their metrics</div></>;
   if (section === "dampers") return <>{defs}<DamperBox laps={laps} settings={settings} /><DamperSetupBox laps={laps} /></>;
   if (section === "camber") return <>{defs}<CamberBox laps={laps} settings={settings} /></>;
+  if (section === "pressure") return <>{defs}<PressureBox laps={laps} settings={settings} /></>;
   if (error) return <>{defs}<div className="error">{error}</div></>;
   if (!m) return <>{defs}<div className="empty">Loading…</div></>;
   // Match each result to its compared lap (for colours and names). While new
