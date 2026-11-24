@@ -123,6 +123,13 @@ def _copy(src: Path, dst: Path) -> None:
 def write_atomic(dst: Path, text: str) -> None:
     """Write under a temporary name, then rename, so a half-written file is never seen."""
     fd, tmp = tempfile.mkstemp(dir=dst.parent, suffix=".tmp")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(text)
-    os.replace(tmp, dst)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, dst)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise

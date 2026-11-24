@@ -29,11 +29,9 @@ from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime
 from pathlib import Path
 
-from . import config
-from .config import CSP_DIR, CSV_DIR, IRACING_DIR, TELEMETRY_DIR, TRACKS_DIRS
+from .config import CSP_DIR, CSV_DIR, DATA_DIR, IRACING_DIR, TELEMETRY_DIR, TRACKS_DIRS
 from .ingest import csv_import
 from .ingest.ac_track import canonical_track, track_aliases
-from .ingest.csv_import import read_csv
 from .ingest.ibt import read_ibt
 from .ingest.motec_ld import LdSession, read_ld
 from .laps import best_lap, lap_infos, track_length
@@ -41,8 +39,8 @@ from .maths import add_maths_channels
 from .shared import SharedLibrary, long_path, write_atomic
 
 MAX_SESSIONS_IN_MEMORY = 8
-READERS = {".ld": read_ld, ".ibt": read_ibt, ".csv": read_csv}
-CACHE_FILE = config.DATA_DIR / "run_summaries.json"
+READERS = {".ld": read_ld, ".ibt": read_ibt, ".csv": csv_import.read_csv}
+CACHE_FILE = DATA_DIR / "run_summaries.json"
 log = logging.getLogger(__name__)
 
 
@@ -261,9 +259,10 @@ class Catalog:
             return None
         if not (s.shared and s.mine):
             raise ValueError("Only your own shared runs can be taken out of the team library")
-        for team_id, (path, owner) in self._paths().items():
-            if owner == self.shared.me and (t := self._team_summary(team_id, path, owner)) and t.key == s.key:
-                self.shared.unshare(path)
+        with self._lock:  # _team_summary can add to the saved summaries
+            for team_id, (path, owner) in self._paths().items():
+                if owner == self.shared.me and (t := self._team_summary(team_id, path, owner)) and t.key == s.key:
+                    self.shared.unshare(path)
         return self.summary(session_id) or replace(s, shared=False)
 
     def _load(self, path: Path) -> LdSession:
