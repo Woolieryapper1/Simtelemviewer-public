@@ -217,7 +217,9 @@ def axle_setup(axle: str, sus: dict, total_kg: float, front_share: float, tyre_n
         now = from_values(field)
         if now is None:
             now = _num(sus, sus_key)
-        if not now:  # missing, or 0: no damper at this corner (e.g. a heave car's front corners)
+        # Missing, or 0 in the car files: no damper at this corner (e.g. a heave car's front corners).
+        # A 0 in the setup is a real setting (0 clicks), so it stays.
+        if now is None or (now == 0 and field not in values):
             continue
         target = getattr(st, target_key)
         settable = field in setup_ini or field in values

@@ -162,6 +162,12 @@ def test_heave_car_needs_a_spring_rate(car_dir):
     assert front.spring_from == "setup" and [r.name for r in front.dampers] == ["Bump"]
 
 
+def test_a_setup_damper_at_zero_clicks_is_kept(car_dir):
+    heave_car(car_dir)
+    front, _ = car_setup(car_dir, {"SPRING_RATE_HF": 80, "DAMP_BUMP_HF": 0}, DamperSetupSettings())
+    assert [r.name for r in front.dampers] == ["Bump"]  # 0 clicks is a setting, not "no damper"
+
+
 def test_tyre_compound_comes_from_the_setup(car_dir):
     soft, _ = car_setup(car_dir, {"TYRES": 1}, DamperSetupSettings())
     assert soft.tyre_n_mm == 200
