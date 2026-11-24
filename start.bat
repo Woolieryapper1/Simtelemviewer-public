@@ -7,7 +7,7 @@ rem ===========================================================================
 cd /d "%~dp0"
 title FS Telemetry
 
-if not exist .venv\Scripts\fs-telemetry.exe (
+if not exist .venv\Scripts\python.exe (
     echo.
     echo  The app isn't set up yet - double-click setup.bat first.
     echo.
@@ -18,7 +18,8 @@ if not exist .venv\Scripts\fs-telemetry.exe (
 rem Your own folder settings, if you made them (see my-settings.example.bat)
 if exist my-settings.bat call my-settings.bat
 
-.venv\Scripts\fs-telemetry.exe %*
+rem python -m, not fs-telemetry.exe: Windows Application Control can block that launcher
+.venv\Scripts\python.exe -m fs_telemetry %*
 
 rem Only reached if the app stopped - keep the window open so any error can be read
 echo.

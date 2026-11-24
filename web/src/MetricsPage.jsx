@@ -39,7 +39,7 @@ function loadBoxes() {
   } catch { /* corrupt entry: fall back to defaults */ }
   return DEFAULT_BOXES;
 }
-export default function MetricsPage({ laps: allLaps, settings, onSettings, comparison }) {
+export default function MetricsPage({ laps: allLaps, settings, onSettings, comparison, colourKey }) {
   const laps = allLaps.filter((l) => l.kind === "timed").map((l) => ({ ...l, shortLabel: shortLabel(l) }));
   const [metrics, setMetrics] = useState(null);
   const [error, setError] = useState(null);
@@ -86,7 +86,7 @@ export default function MetricsPage({ laps: allLaps, settings, onSettings, compa
   // numbers load the old ones stay up, so a lap may already have been removed.
   const shown = m.laps.map((r, i) => laps.find((l) => l.sessionId === r.session_id && l.lap === r.lap)
     ?? { key: `${r.session_id}#${r.lap}`, slot: i, shortLabel: `${r.driver.slice(0, 12)} L${r.lap}` });
-  const slots = shown.map((l) => l.slot).join(); // redraw if a lap's colour changes
+  const slots = shown.map((l) => l.slot).join() + colourKey; // redraw if a lap's colour changes (picked, by car, or reordered)
 
   const balanceIds = ["balance", "oversteer", "mech"];
   const inSection = (id) => id !== "dampers" && (section === "balance" ? balanceIds.includes(id) : !balanceIds.includes(id));
