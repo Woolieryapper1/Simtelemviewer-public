@@ -13,7 +13,7 @@ import { Checkbox, Input, Segmented, Select } from "./ui/index.js";
 // remembered in this browser.
 
 const GATE_OPTIONS = ["all", "Braking", "LS", "MS", "HS", "Power limited"];
-const DEFAULTS = { scope: "run", gate: "all", peakPct: 98, minG: 0.6, maxG: "", compound: "", typed: false, f0: "", f1: "", r0: "", r1: "" };
+const DEFAULTS = { scope: "run", gate: "all", gBasis: "auto", insideTyre: "abs", minGain: 0.5, peakPct: 98, minG: 0.6, maxG: "", compound: "", typed: false, f0: "", f1: "", r0: "", r1: "" };
 const STORAGE_KEY = "camberOptions";
 
 function loadOptions() {
@@ -40,7 +40,8 @@ export default function CamberBox({ laps, settings }) {
   const peakOk = opts.peakPct !== "" && Number(opts.peakPct) >= 50 && Number(opts.peakPct) <= 100;
   const peakPct = peakOk ? Number(opts.peakPct) : DEFAULTS.peakPct;
   const request = {
-    scope: opts.scope, gate: opts.gate, peak_pct: peakPct, min_g: opts.minG, max_g: maxG, compound: opts.compound,
+    scope: opts.scope, gate: opts.gate, g_basis: opts.gBasis, inside_tyre: opts.insideTyre, min_gain_pct: opts.minGain === "" ? DEFAULTS.minGain : opts.minGain,
+    peak_pct: peakPct, min_g: opts.minG, max_g: maxG, compound: opts.compound,
     ...(front ? { front_dcamber0: front[0], front_dcamber1: front[1] } : {}),
     ...(rear ? { rear_dcamber0: rear[0], rear_dcamber1: rear[1] } : {}),
   };
@@ -81,12 +82,28 @@ export default function CamberBox({ laps, settings }) {
             {GATE_OPTIONS.map((g) => <option key={g} value={g}>{g === "all" ? "the whole lap" : g}</option>)}
           </Select>
         </label>
-        <span className="field band-inputs" title="Only count moments whose combined G is in this band. Peak G is this percentile of combined G over the whole laps (below 100 ignores kerb spikes). Leave the upper limit empty for no limit; e.g. 0.4 to 0.8 looks at corner entry and exit rather than the apex.">
+        <Segmented label="G" value={opts.gBasis} onChange={(gBasis) => change({ gBasis })}
+          options={[
+            { value: "auto", label: "Auto", title: "Cornering (lateral G), except in the Braking gate, which uses combined G" },
+            { value: "lateral", label: "Lateral", title: "Only lateral G sets the peak and the band: cornering, not braking or traction" },
+            { value: "combined", label: "Combined", title: "Lateral and longitudinal G together: braking and traction count too" },
+          ]} />
+        <Segmented label="Inside tyre" value={opts.insideTyre} onChange={(insideTyre) => change({ insideTyre })}
+          options={[
+            { value: "abs", label: "Size only", title: "Grip depends on the size of the camber only (the tyres.ini comment): a tyre rolled to positive camber still earns grip" },
+            { value: "signed", label: "Signed", title: "Positive camber (top out) loses grip, so a lightly loaded inside tyre that rolls past zero pulls the answer towards more negative camber" },
+          ]} />
+        <label className="field" title="An axle's best change is only called worthwhile if it scores at least this many points above the current camber. The camber curve is flat near its peak, so a smaller gain is within what the model can tell apart.">
+          Worthwhile from
+          <Input size="sm" aria-label="Smallest score gain that counts, in points" type="number" min="0" max="5" step="0.1" value={opts.minGain}
+            onChange={(e) => e.target.value !== "" && change({ minGain: Number(e.target.value) })} /> pts
+        </label>
+        <span className="field band-inputs" title="Only count moments whose G is in this band (lateral or combined, see G). Peak G is this percentile of that G over the whole laps (below 100 ignores kerb spikes). Leave the upper limit empty for no limit; e.g. 0.4 to 0.8 looks at corner entry and exit rather than the apex.">
           <Input size="sm" aria-label="Lower share of peak G" type="number" min="0" max="1" step="0.05"
             value={opts.minG} onChange={(e) => e.target.value !== "" && change({ minG: Number(e.target.value) })} /> to
           <Input size="sm" aria-label="Upper share of peak G (empty: no limit)" type="number" min="0" max="2" step="0.05" placeholder="max"
             value={opts.maxG} onChange={(e) => change({ maxG: e.target.value })} /> × peak G · peak =
-          <Input size="sm" aria-label="Percentile of combined G that counts as peak" type="number" min="50" max="100" step="1"
+          <Input size="sm" aria-label="Percentile of G that counts as peak" type="number" min="50" max="100" step="1"
             value={opts.peakPct} onChange={(e) => change({ peakPct: e.target.value })} />th percentile
         </span>
         {opts.maxG !== "" && maxG === "" && <span className="bad-text">Upper limit must be above the lower</span>}
@@ -135,18 +152,19 @@ function CamberTable({ d, sels }) {
           <tr>
             <th />
             {d.selections.map((s, i) => (
-              <th key={i} colSpan={3} className="group">
+              <th key={i} colSpan={4} className="group">
                 <span className="lap-dot" style={{ background: `var(--lap-${sels[i].slot + 1})` }} /> {sels[i].label}
-                <div className="muted small">{num(s.time_s, 1)} s counted · peak {num(s.peak_g, 2)} g · {s.compound}</div>
+                <div className="muted small">{num(s.time_s, 1)} s counted · peak {num(s.peak_g, 2)} g {s.g_basis} · {s.compound}</div>
               </th>
             ))}
           </tr>
           <tr>
             <th>Wheel</th>
             {d.selections.flatMap((_, i) => [
-              <th key={`m${i}`} className="num g" title="Load-weighted average camber near the limit">Ran °</th>,
+              <th key={`m${i}`} className="num g" title="Average camber near the limit, each moment weighted by the tyre's force (load^LS_EXPY)">Ran °</th>,
               <th key={`r${i}`} className="num" title="10th to 90th percentile">Range °</th>,
               <th key={`p${i}`} className="num" title="The tyre's peak-grip camber">Peak °</th>,
+              <th key={`c${i}`} className="num" title="Camber logged where G is near zero (straights). Compare with your setup's static camber: it includes ride height, so it needn't match exactly, but the difference between runs should.">Calm °</th>,
             ])}
           </tr>
         </thead>
@@ -159,7 +177,8 @@ function CamberTable({ d, sels }) {
                 return [
                   <td key={`m${i}`} className="num mono g">{num(w.mean_deg, 2)}</td>,
                   <td key={`r${i}`} className="num mono">{num(w.p10_deg, 1)} to {num(w.p90_deg, 1)}</td>,
-                  <td key={`p${i}`} className="num mono" title={`${t.source}: DCAMBER_0 ${t.dcamber0}, DCAMBER_1 ${t.dcamber1}`}>{num(t.peak_deg, 2)}</td>,
+                  <td key={`p${i}`} className="num mono" title={`${t.source}: DCAMBER_0 ${t.dcamber0}, DCAMBER_1 ${t.dcamber1}, LS_EXPY ${t.ls_expy}`}>{num(t.peak_deg, 2)}</td>,
+                  <td key={`c${i}`} className="num mono">{num(w.calm_deg, 2)}</td>,
                 ];
               })}
             </tr>
@@ -170,12 +189,17 @@ function CamberTable({ d, sels }) {
               {d.selections.flatMap((s, i) => {
                 const a = s.axles.find((x) => x.axle === axle);
                 return [
-                  <td key={`b${i}`} colSpan={3} className="num mono g">
-                    {a.best_offset_deg == null ? "–" : <>
+                  <td key={`b${i}`} colSpan={4} className="num mono g" title={a.temp_note ?? undefined}>
+                    {a.best_offset_deg == null ? "–" : a.worthwhile ? <>
                       <b>{signed(a.best_offset_deg, 1)}°</b> static
                       <span className="muted"> · score {num(a.current_pct, 2)}% → {num(a.best_pct, 2)}%</span>
                       {a.at_limit && <span className="bad-text"> · at the end of the range</span>}
+                    </> : <>
+                      <span className="muted">no clear change</span>
+                      <span className="muted"> · best {signed(a.best_offset_deg, 1)}° gains only {num(a.gain_pct, 2)} pts</span>
                     </>}
+                    {a.spread_c != null && <span className="muted"> · inner − outer {signed(a.spread_c, 0)} °C</span>}
+                    {a.temp_conflict && <span className="bad-text"> · tread temps disagree</span>}
                   </td>,
                 ];
               })}
@@ -183,7 +207,7 @@ function CamberTable({ d, sels }) {
           ))}
         </tbody>
       </table>
-      <p className="hint table-foot">Change to static camber per axle: − = more negative. Score 100% = every loaded moment at the tyre's peak.</p>
+      <p className="hint table-foot">Change to static camber per axle: − = more negative. Score 100% = every loaded moment at the tyre's peak. The curve is flat near the peak, so small gains are shown as "no clear change"; tread temperatures only cross-check the change.</p>
     </div>
   );
 }
