@@ -95,6 +95,11 @@ Shared UI pieces and design tokens live in `web/src/ui/` and `theme.css`.
   the installed folder's name (or a hand-made alias from `track_aliases.json` in `FS_DATA_DIR`) when a run is read,
   and for teammates' saved summaries. `session_key` still hashes the name as logged (`logged_track`), so notes keys
   never change.
+- Camber optimiser (`camber.py`, AC only): scores the logged camber against tyres.ini's DCAMBER parabola, each tyre counting by
+  load^LS_EXPY (not load: force grows slower than load). The parabola is an assumption (the file's own comment, read literally,
+  has no peak) and it is very flat near the peak, so a change under `min_gain_pct` is reported as "no clear change". It ignores
+  AC's thermal tyre model and CAMBER_GAIN, so it can disagree with what works on track (the rear especially); tread temperature is
+  only a cross-check. The logged camber includes ride height, so it isn't the setup's static number (compare `calm_deg` between runs).
 - UI text explains itself in hover text rather than in the README; keep new features the same way.
 - Lap colours are the CSS variables `--lap-1..6`; charts read them when they draw. Picked colours and "colour by
   car" shades are written over them by `colours.applyLapColours` in a *layout* effect in `App.jsx`, so they're
