@@ -54,6 +54,13 @@ export const api = {
     for (const [k, v] of Object.entries({ ...settings, ...options })) if (v !== "" && v != null) q.set(k, v);
     return getJSON(`/api/camber?${q}`);
   },
+  // options: { scope, gate, peak_pct, min_g, max_g, compound, ideal_psi, psi_per_c, ... } (see backend pressure.py
+  // PressureSettings); settings: the metric definitions (they set the gates)
+  pressure: (laps, settings, options) => {
+    const q = new URLSearchParams(laps.map((l) => ["lap", `${l.sessionId}:${l.lap}`]));
+    for (const [k, v] of Object.entries({ ...settings, ...options })) if (v !== "" && v != null) q.set(k, v);
+    return getJSON(`/api/pressure?${q}`);
+  },
   // options: { scope, setup_id, ls_bump, ... } (see backend damper_setup.py DamperSetupSettings)
   damperSetup: (laps, options) => {
     const q = new URLSearchParams(laps.map((l) => ["lap", `${l.sessionId}:${l.lap}`]));

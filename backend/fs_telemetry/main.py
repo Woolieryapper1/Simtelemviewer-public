@@ -31,6 +31,7 @@ from .ingest.motec_ld import LdSession
 from .laps import best_lap, lap_infos, resample_lap
 from .layouts import Layout, LayoutIn, LayoutStore
 from .metrics import MetricSettings, Metrics, compute_metrics
+from .pressure import Pressure, PressureSettings, compute_pressure
 from .notes import ImportResult, LapNoteIn, NotesStore, SessionNote, SessionNoteIn
 from .setups import AvailableSetup, Setup, SetupComparison, SetupError, SetupIn, SetupLibrary, SetupSummary
 from .sectors import sector_boundaries
@@ -313,6 +314,25 @@ def camber(q: Annotated[CamberQuery, Query()]) -> Camber:
         settings = CamberSettings(**{k: data[k] for k in CamberSettings.model_fields})
         gating = MetricSettings(**{k: data[k] for k in MetricSettings.model_fields})
         return compute_camber(catalog, [LapRef.parse(x) for x in q.lap], settings, gating)
+    except CompareError as e:
+        raise HTTPException(422, str(e))
+
+
+class PressureQuery(PressureSettings, MetricSettings):
+    # Gate definitions come from the same settings as /metrics, as for CamberQuery
+    lap: list[str] = Field(description="Laps as '<session id>:<lap number>'. The first is the reference (and sets the gates).")
+
+
+@api.get("/pressure")
+def pressure(q: Annotated[PressureQuery, Query()]) -> Pressure:
+    """Tyre pressure advice (AC only): each tyre's hot pressure and tread temperature while near the limit, scored
+    against the car's own PRESSURE_IDEAL / PRESSURE_D_GAIN and temperature curve from tyres.ini, with the cold
+    pressure change that lands the hot pressure on the ideal, now and if the tread ran hotter or cooler."""
+    data = q.model_dump(exclude={"lap"})
+    try:
+        settings = PressureSettings(**{k: data[k] for k in PressureSettings.model_fields})
+        gating = MetricSettings(**{k: data[k] for k in MetricSettings.model_fields})
+        return compute_pressure(catalog, [LapRef.parse(x) for x in q.lap], settings, gating)
     except CompareError as e:
         raise HTTPException(422, str(e))
 

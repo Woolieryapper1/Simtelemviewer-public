@@ -36,7 +36,7 @@ web/src  -- npm run build -->  backend/fs_telemetry/web  (committed, never edite
 |---|---|---|
 | Telemetry | `TelemetryPage.jsx`, `TelemetryChart.jsx`, `rowMaths.js` (row smoothing/scaling) | `compare.py`, `layouts.py` |
 | Stint | `StintPage.jsx`, `stintBoxes.jsx` | `stint.py` |
-| Metrics | `MetricsPage.jsx`, `DamperBox.jsx` | `metrics.py`, `dampers.py` |
+| Metrics | `MetricsPage.jsx`, `DamperBox.jsx`, `PressureBox.jsx` | `metrics.py`, `dampers.py`, `pressure.py` |
 | Track | `TrackPage.jsx` | `compare.py`, `sectors.py`, `ingest/ac_track.py` |
 | Setups | `SetupsPage.jsx` | `setups.py`, `setup_notes.py` |
 
@@ -95,6 +95,15 @@ Shared UI pieces and design tokens live in `web/src/ui/` and `theme.css`.
   the installed folder's name (or a hand-made alias from `track_aliases.json` in `FS_DATA_DIR`) when a run is read,
   and for teammates' saved summaries. `session_key` still hashes the name as logged (`logged_track`), so notes keys
   never change.
+- Pressure advisor (`pressure.py`, AC only): the hot pressure and tread temperature each tyre ran near the limit (same G
+  selection as the camber box, weighted by load^LS_EXPY), against tyres.ini's PRESSURE_IDEAL / PRESSURE_D_GAIN and the
+  temperature curve (`PERFORMANCE_CURVE` .lut). Pressure and temperature are linked: the log shows the HOT pressure, the setup
+  only the cold one, so the advice is a cold change (`ideal - hot`, rounded to setup.ini's slider step) plus "if the tread ran
+  N degC hotter" columns using PRESSURE_TEMPERATURE_GAIN. Assumptions, none documented by Kunos: the pressure loss is linear and
+  the same either side of the ideal; the temperature curve is read against the mean tread (inner/middle/outer) temperature;
+  the gain is psi per degC of tread; a cold change moves the hot pressure one for one without changing the temperature. The
+  run's own lap-to-lap pressure slope is shown next to the file's gain as a cross-check. Wear, graining and AC's thermal model
+  aren't scored.
 - Camber optimiser (`camber.py`, AC only): scores the logged camber against tyres.ini's DCAMBER parabola, each tyre counting by
   load^LS_EXPY (not load: force grows slower than load). The parabola is an assumption (the file's own comment, read literally,
   has no peak) and it is very flat near the peak, so a change under `min_gain_pct` is reported as "no clear change". It ignores
